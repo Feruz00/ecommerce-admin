@@ -1,23 +1,47 @@
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { getOrders, updateOrderStatus } from './api';
-import { message } from 'antd';
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { message } from "antd";
+
+import { getOrders, getOrder, updateOrderStatus } from "./api";
 
 export const useOrders = (params = {}) => {
   return useQuery({
-    queryKey: ['admin-orders', params],
+    queryKey: ["admin-orders", params],
     queryFn: () => getOrders(params),
   });
 };
 
+export const useOrder = (id) => {
+  return useQuery({
+    queryKey: ["admin-order", id],
+    queryFn: () => getOrder(id),
+    enabled: Boolean(id),
+  });
+};
+
 export const useUpdateOrderStatus = () => {
-  const qc = useQueryClient();
+  const queryClient = useQueryClient();
+
   return useMutation({
     mutationFn: ({ id, ...payload }) => updateOrderStatus(id, payload),
-    onSuccess: () => {
-      qc.invalidateQueries(['admin-orders']);
-      qc.invalidateQueries(['admin-dashboard']);
-      message.success('Order updated');
+
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({
+        queryKey: ["admin-orders"],
+      });
+
+      queryClient.invalidateQueries({
+        queryKey: ["admin-order", variables.id],
+      });
+
+      queryClient.invalidateQueries({
+        queryKey: ["admin-dashboard"],
+      });
+
+      message.success("Order updated successfully");
     },
-    onError: (err) => message.error(err.response?.data?.message || 'Update failed'),
+
+    onError: (error) => {
+      message.error(error.response?.data?.message || "Failed to update order");
+    },
   });
 };

@@ -22,12 +22,22 @@ import {
   ReloadOutlined,
 } from "@ant-design/icons";
 
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-
 import dayjs from "dayjs";
-import api from "../../api/axios";
+
+import { useOrders, useOrder, useUpdateOrderStatus } from "./hooks";
 
 const { Title, Text } = Typography;
+
+const statuses = [
+  "pending",
+  "confirmed",
+  "processing",
+  "shipped",
+  "delivered",
+  "cancelled",
+];
+
+const paymentStatuses = ["pending", "paid", "failed", "refunded"];
 
 const statusColors = {
   pending: "orange",
@@ -45,49 +55,59 @@ const paymentColors = {
   refunded: "purple",
 };
 
-const statuses = [
-  "pending",
-  "confirmed",
-  "processing",
-  "shipped",
-  "delivered",
-  "cancelled",
-];
+const formatPrice = (value) => {
+  const number = Number(value ?? 0);
 
-const payStatuses = ["pending", "paid", "failed", "refunded"];
-
-const formatPrice = (value) =>
-  `${Number(value || 0).toLocaleString("ru-RU", {
+  return `${number.toLocaleString("ru-RU", {
+    minimumFractionDigits: 0,
     maximumFractionDigits: 2,
   })} TMT`;
+};
 
-const formatDate = (value) =>
-  value ? dayjs(value).format("DD MMM YYYY, HH:mm") : "—";
+const formatDate = (value) => {
+  return value ? dayjs(value).format("DD MMM YYYY, HH:mm") : "—";
+};
+
+const capitalize = (value = "") => {
+  return value.charAt(0).toUpperCase() + value.slice(1);
+};
 
 function getCustomerName(user) {
   if (!user) return "—";
 
-  return `${user.first_name || ""} ${user.last_name || ""}`.trim() || "—";
+  return (
+    `${user.first_name || ""} ${user.last_name || ""}`.trim() ||
+    user.name ||
+    "—"
+  );
 }
 
 /**
- * Convert saved selected_attributes into readable rows.
- *
- * Supports:
- * {
- *   color: "Black",
- *   size: "XL",
- *   variant_id: "uuid"
- * }
- *
- * Also supports nested objects.
+ * MySQL JSON fields normally arrive as objects through Sequelize.
+ * This also supports a JSON string in case the API serializes it that way.
  */
-function getAttributeEntries(attributes) {
-  if (!attributes || typeof attributes !== "object") {
-    return [];
+function parseAttributes(attributes) {
+  if (!attributes) return {};
+
+  if (typeof attributes === "string") {
+    try {
+      return JSON.parse(attributes);
+    } catch {
+      return {};
+    }
   }
 
-  return Object.entries(attributes)
+  if (typeof attributes === "object" && !Array.isArray(attributes)) {
+    return attributes;
+  }
+
+  return {};
+}
+
+function getAttributeEntries(attributes) {
+  const parsed = parseAttributes(attributes);
+
+  return Object.entries(parsed)
     .filter(([key, value]) => {
       return (
         key !== "variant_id" &&
@@ -101,10 +121,10 @@ function getAttributeEntries(attributes) {
 
       if (typeof value === "object") {
         displayValue =
-          value.name ||
-          value.label ||
-          value.value ||
-          value.title ||
+          value.name ??
+          value.label ??
+          value.value ??
+          value.title ??
           JSON.stringify(value);
       }
 
@@ -117,34 +137,37 @@ function getAttributeEntries(attributes) {
 
 function VariantDetails({ item }) {
   const entries = getAttributeEntries(item.selected_attributes);
+  const attributes = parseAttributes(item.selected_attributes);
 
-  if (!item.variant_id && !entries.length) {
+  const variantId = item.variant_id || attributes.variant_id;
+
+  if (!variantId && !entries.length) {
     return (
-      <Text type="secondary" className="text-xs">
+      <Tag color="default" className="!mt-2 !mr-0">
         Standard product
-      </Text>
+      </Tag>
     );
   }
 
   return (
     <div className="mt-2 space-y-2">
-      <div className="flex flex-wrap gap-1.5">
-        {entries.map(({ key, value }) => (
-          <Tag key={key} color="blue" className="!mr-0">
-            <span className="font-medium">{key}:</span> {value}
-          </Tag>
-        ))}
-      </div>
-
-      {item.variant_id && (
-        <div>
-          <Text type="secondary" className="text-xs">
-            Variant ID: {item.variant_id}
-          </Text>
+      {entries.length > 0 && (
+        <div className="flex flex-wrap gap-1.5">
+          {entries.map(({ key, value }) => (
+            <Tag key={key} color="blue" className="!mr-0">
+              <span className="font-medium">{capitalize(key)}:</span> {value}
+            </Tag>
+          ))}
         </div>
       )}
 
-      {!entries.length && item.selected_attributes?.variant_id && (
+      {variantId && (
+        <Text type="secondary" className="block text-xs">
+          Variant ID: {variantId}
+        </Text>
+      )}
+
+      {!entries.length && variantId && (
         <Text type="secondary" className="text-xs">
           Variant selected
         </Text>
@@ -154,143 +177,180 @@ function VariantDetails({ item }) {
 }
 
 function OrderItemsTable({ items = [] }) {
+  const columns = [
+    {
+      title: "Product",
+      key: "product",
+      width: 280,
+      render: (_, item) => (
+        <div className="min-w-[180px]">
+          <div className="font-semibold text-slate-800">
+            {item.product_name || item.product?.name || "Product"}
+          </div>
+
+          {item.product_sku && (
+            <Text type="secondary" className="text-xs">
+              SKU: {item.product_sku}
+            </Text>
+          )}
+
+          <VariantDetails item={item} />
+        </div>
+      ),
+    },
+    {
+      title: "Quantity",
+      dataIndex: "quantity",
+      width: 90,
+      align: "center",
+      render: (value) => (
+        <span className="font-semibold">{Number(value || 0)}</span>
+      ),
+    },
+    {
+      title: "Unit price",
+      dataIndex: "price",
+      width: 130,
+      align: "right",
+      render: formatPrice,
+    },
+    {
+      title: "Total",
+      dataIndex: "total",
+      width: 130,
+      align: "right",
+      render: (value, item) => {
+        const total =
+          value !== undefined && value !== null
+            ? value
+            : Number(item.price || 0) * Number(item.quantity || 0);
+
+        return <span className="font-semibold">{formatPrice(total)}</span>;
+      },
+    },
+  ];
+
   return (
     <Table
       size="middle"
       pagination={false}
-      rowKey="id"
+      rowKey={(item) =>
+        item.id || `${item.product_id}-${item.variant_id || "standard"}`
+      }
       dataSource={items}
-      scroll={{ x: 750 }}
+      columns={columns}
+      scroll={{ x: 650 }}
       locale={{
         emptyText: <Empty description="No products in this order" />,
       }}
-      columns={[
-        {
-          title: "Product",
-          key: "product",
-          width: 260,
-          render: (_, item) => (
-            <div>
-              <div className="font-semibold text-slate-800">
-                {item.product_name || "Product"}
-              </div>
-
-              {item.product_sku && (
-                <Text type="secondary" className="text-xs">
-                  SKU: {item.product_sku}
-                </Text>
-              )}
-
-              <VariantDetails item={item} />
-            </div>
-          ),
-        },
-        {
-          title: "Quantity",
-          dataIndex: "quantity",
-          width: 90,
-          align: "center",
-          render: (value) => <span className="font-semibold">{value}</span>,
-        },
-        {
-          title: "Unit price",
-          dataIndex: "price",
-          width: 130,
-          align: "right",
-          render: formatPrice,
-        },
-        {
-          title: "Total",
-          dataIndex: "total",
-          width: 130,
-          align: "right",
-          render: (value) => (
-            <span className="font-semibold">{formatPrice(value)}</span>
-          ),
-        },
-      ]}
     />
   );
+}
+
+function SummaryCard({ label, value, color }) {
+  return (
+    <Card size="small" className="h-full">
+      <Text type="secondary">{label}</Text>
+      <div className={`mt-1 text-2xl font-bold ${color || "text-slate-800"}`}>
+        {value}
+      </div>
+    </Card>
+  );
+}
+
+function getOrdersFromResponse(response) {
+  return (
+    response?.data?.orders ||
+    response?.orders ||
+    response?.data?.rows ||
+    response?.rows ||
+    []
+  );
+}
+
+function getOrderFromResponse(response) {
+  return response?.data?.order || response?.order || response?.data || null;
 }
 
 export default function OrdersPage() {
   const [status, setStatus] = useState(undefined);
   const [detailId, setDetailId] = useState(null);
 
-  const qc = useQueryClient();
-
-  // Orders list
-  const { data, isLoading, isError, refetch, isFetching } = useQuery({
-    queryKey: ["admin-orders", status],
-    queryFn: () =>
-      api
-        .get("/orders", {
-          params: {
-            limit: 50,
-            status: status || undefined,
-          },
-        })
-        .then((response) => response.data),
+  const {
+    data: ordersResponse,
+    isLoading,
+    isError,
+    isFetching,
+    refetch,
+  } = useOrders({
+    limit: 50,
+    status: status || undefined,
   });
 
-  // Load complete order details when modal opens.
-  const { data: detailResponse, isLoading: detailLoading } = useQuery({
-    queryKey: ["admin-order", detailId],
-    queryFn: () =>
-      api.get(`/orders/${detailId}`).then((response) => response.data),
-    enabled: !!detailId,
-  });
+  const {
+    data: detailResponse,
+    isLoading: detailLoading,
+    isError: detailError,
+    refetch: refetchDetail,
+  } = useOrder(detailId);
 
-  const detail = detailResponse?.data?.order || detailResponse?.order || null;
+  const updateMutation = useUpdateOrderStatus();
 
-  // Update status/payment
-  const updateMut = useMutation({
-    mutationFn: ({ id, ...body }) => api.patch(`/orders/${id}/status`, body),
+  const orders = useMemo(
+    () => getOrdersFromResponse(ordersResponse),
+    [ordersResponse],
+  );
 
-    onSuccess: (_, variables) => {
-      qc.invalidateQueries({
-        queryKey: ["admin-orders"],
-      });
-
-      qc.invalidateQueries({
-        queryKey: ["admin-order", variables.id],
-      });
-
-      message.success("Order updated");
-    },
-
-    onError: (error) => {
-      message.error(error.response?.data?.message || "Failed to update order");
-    },
-  });
-
-  const orders = data?.data?.orders || [];
+  const detail = useMemo(
+    () => getOrderFromResponse(detailResponse),
+    [detailResponse],
+  );
 
   const summary = useMemo(() => {
     return {
       count: orders.length,
+
       pending: orders.filter((order) => order.status === "pending").length,
+
       processing: orders.filter((order) =>
         ["confirmed", "processing", "shipped"].includes(order.status),
       ).length,
+
       completed: orders.filter((order) => order.status === "delivered").length,
     };
   }, [orders]);
+
+  const handleStatusChange = (order, nextStatus) => {
+    if (nextStatus === order.status) return;
+
+    updateMutation.mutate({
+      id: order.id,
+      status: nextStatus,
+    });
+  };
+
+  const handlePaymentChange = (order, nextStatus) => {
+    if (nextStatus === order.payment_status) return;
+
+    updateMutation.mutate({
+      id: order.id,
+      payment_status: nextStatus,
+    });
+  };
 
   const columns = [
     {
       title: "Order",
       dataIndex: "order_number",
-      width: 150,
+      width: 155,
       render: (value) => (
-        <div>
-          <div className="font-semibold text-slate-800">{value}</div>
-        </div>
+        <div className="font-semibold text-slate-800">{value || "—"}</div>
       ),
     },
     {
       title: "Customer",
       key: "customer",
+      width: 190,
       render: (_, order) => (
         <div>
           <div className="font-medium text-slate-800">
@@ -308,12 +368,14 @@ export default function OrdersPage() {
       dataIndex: "items",
       width: 90,
       align: "center",
-      render: (items) => (
-        <Tag>
-          {items?.reduce((sum, item) => sum + Number(item.quantity || 0), 0) ||
-            0}
-        </Tag>
-      ),
+      render: (items) => {
+        const quantity = (items || []).reduce(
+          (sum, item) => sum + Number(item.quantity || 0),
+          0,
+        );
+
+        return <Tag>{quantity}</Tag>;
+      },
     },
     {
       title: "Total",
@@ -332,41 +394,39 @@ export default function OrdersPage() {
         <Select
           size="small"
           value={value}
-          disabled={updateMut.isPending}
+          disabled={updateMutation.isPending}
           style={{ width: 135 }}
           options={statuses.map((item) => ({
             value: item,
-            label: item,
+            label: (
+              <Tag color={statusColors[item]} className="!mr-0">
+                {capitalize(item)}
+              </Tag>
+            ),
           }))}
-          onChange={(nextStatus) =>
-            updateMut.mutate({
-              id: order.id,
-              status: nextStatus,
-            })
-          }
+          onChange={(nextStatus) => handleStatusChange(order, nextStatus)}
         />
       ),
     },
     {
       title: "Payment",
       dataIndex: "payment_status",
-      width: 130,
+      width: 135,
       render: (value, order) => (
         <Select
           size="small"
           value={value}
-          disabled={updateMut.isPending}
-          style={{ width: 110 }}
-          options={payStatuses.map((item) => ({
+          disabled={updateMutation.isPending}
+          style={{ width: 115 }}
+          options={paymentStatuses.map((item) => ({
             value: item,
-            label: item,
+            label: (
+              <Tag color={paymentColors[item]} className="!mr-0">
+                {capitalize(item)}
+              </Tag>
+            ),
           }))}
-          onChange={(nextStatus) =>
-            updateMut.mutate({
-              id: order.id,
-              payment_status: nextStatus,
-            })
-          }
+          onChange={(nextStatus) => handlePaymentChange(order, nextStatus)}
         />
       ),
     },
@@ -405,7 +465,7 @@ export default function OrdersPage() {
           </Text>
         </div>
 
-        <Space>
+        <Space wrap>
           <Select
             allowClear
             placeholder="All statuses"
@@ -414,7 +474,7 @@ export default function OrdersPage() {
             onChange={setStatus}
             options={statuses.map((item) => ({
               value: item,
-              label: item,
+              label: capitalize(item),
             }))}
           />
 
@@ -430,31 +490,25 @@ export default function OrdersPage() {
 
       {/* Summary */}
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <Card size="small">
-          <Text type="secondary">Loaded orders</Text>
-          <div className="mt-1 text-2xl font-bold">{summary.count}</div>
-        </Card>
+        <SummaryCard label="Loaded orders" value={summary.count} />
 
-        <Card size="small">
-          <Text type="secondary">Pending</Text>
-          <div className="mt-1 text-2xl font-bold text-orange-500">
-            {summary.pending}
-          </div>
-        </Card>
+        <SummaryCard
+          label="Pending"
+          value={summary.pending}
+          color="text-orange-500"
+        />
 
-        <Card size="small">
-          <Text type="secondary">In progress</Text>
-          <div className="mt-1 text-2xl font-bold text-blue-500">
-            {summary.processing}
-          </div>
-        </Card>
+        <SummaryCard
+          label="In progress"
+          value={summary.processing}
+          color="text-blue-500"
+        />
 
-        <Card size="small">
-          <Text type="secondary">Delivered</Text>
-          <div className="mt-1 text-2xl font-bold text-green-600">
-            {summary.completed}
-          </div>
-        </Card>
+        <SummaryCard
+          label="Delivered"
+          value={summary.completed}
+          color="text-green-600"
+        />
       </div>
 
       {/* Orders table */}
@@ -485,11 +539,14 @@ export default function OrdersPage() {
               pageSizeOptions: [15, 30, 50],
               showTotal: (total) => `${total} orders`,
             }}
+            locale={{
+              emptyText: <Empty description="No orders found" />,
+            }}
           />
         )}
       </Card>
 
-      {/* Order details */}
+      {/* Order details modal */}
       <Modal
         title={
           <div className="flex items-center gap-2">
@@ -501,30 +558,44 @@ export default function OrdersPage() {
             </span>
           </div>
         }
-        open={!!detailId}
+        open={Boolean(detailId)}
         onCancel={() => setDetailId(null)}
         footer={[
+          <Button
+            key="refresh"
+            icon={<ReloadOutlined />}
+            onClick={() => refetchDetail()}
+            loading={detailLoading}
+          >
+            Refresh
+          </Button>,
           <Button key="close" onClick={() => setDetailId(null)}>
             Close
           </Button>,
         ]}
-        width={850}
+        width={900}
         destroyOnHidden
       >
         {detailLoading ? (
           <div className="flex justify-center py-16">
             <Spin size="large" />
           </div>
+        ) : detailError ? (
+          <Empty description="Failed to load order details">
+            <Button onClick={() => refetchDetail()}>Try again</Button>
+          </Empty>
         ) : !detail ? (
           <Empty description="Order details not available" />
         ) : (
           <div className="space-y-5">
-            {/* Status */}
+            {/* Order status */}
             <div className="flex flex-wrap items-center gap-2">
-              <Tag color={statusColors[detail.status]}>{detail.status}</Tag>
+              <Tag color={statusColors[detail.status] || "default"}>
+                {capitalize(detail.status || "unknown")}
+              </Tag>
 
-              <Tag color={paymentColors[detail.payment_status]}>
-                Payment: {detail.payment_status}
+              <Tag color={paymentColors[detail.payment_status] || "default"}>
+                Payment: {capitalize(detail.payment_status || "unknown")}
               </Tag>
 
               <Text type="secondary" className="text-xs">
@@ -578,7 +649,7 @@ export default function OrdersPage() {
 
             <Divider className="!my-3" />
 
-            {/* Purchased products */}
+            {/* Order products */}
             <div>
               <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
                 <Title level={5} className="!mb-0">
@@ -586,7 +657,7 @@ export default function OrdersPage() {
                 </Title>
 
                 <Text type="secondary" className="text-xs">
-                  {detail.items?.length || 0} different products
+                  {detail.items?.length || 0} order items
                 </Text>
               </div>
 
