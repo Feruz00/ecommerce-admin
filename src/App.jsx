@@ -1,5 +1,8 @@
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
+
 import AdminLayout from "./layouts/AdminLayout";
+import ProtectedRoute from "./components/ProtectedRoute";
+
 import LoginPage from "./pages/auth/LoginPage";
 import DashboardPage from "./pages/dashboard/DashboardPage";
 import OrdersPage from "./pages/orders/OrdersPage";
@@ -15,16 +18,20 @@ export default function App() {
     <BrowserRouter basename="/admin">
       <Routes>
         <Route path="/login" element={<LoginPage />} />
-        <Route element={<AdminLayout />}>
-          <Route path="/" element={<DashboardPage />} />
-          <Route path="/orders" element={<OrdersPage />} />
-          <Route path="/products" element={<ProductsPage />} />
-          <Route path="/categories" element={<CategoriesPage />} />
-          <Route path="/banners" element={<BannersPage />} />
-          <Route path="/attributes" element={<AttributesPage />} />
-          <Route path="/users" element={<UsersPage />} />
-          <Route path="/reports" element={<ReportsPage />} />
+
+        <Route element={<ProtectedRoute />}>
+          <Route element={<AdminLayout />}>
+            <Route path="/" element={<DashboardPage />} />
+            <Route path="/orders" element={<OrdersPage />} />
+            <Route path="/products" element={<ProductsPage />} />
+            <Route path="/categories" element={<CategoriesPage />} />
+            <Route path="/banners" element={<BannersPage />} />
+            <Route path="/attributes" element={<AttributesPage />} />
+            <Route path="/users" element={<UsersPage />} />
+            <Route path="/reports" element={<ReportsPage />} />
+          </Route>
         </Route>
+
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </BrowserRouter>

@@ -29,6 +29,7 @@ const { Header, Sider, Content } = Layout;
 
 export default function AdminLayout() {
   const [collapsed, setCollapsed] = useState(false);
+
   const setUser = useAuthStore((state) => state.setUser);
   const queryClient = useQueryClient();
   const navigate = useNavigate();
@@ -37,17 +38,10 @@ export default function AdminLayout() {
   const { t, i18n } = useTranslation();
   const { token } = theme.useToken();
 
-  const { data: meData, isLoading } = useMe();
+  const { data: meData } = useMe();
   const logoutMutation = useLogout();
 
   const user = meData?.data?.user;
-
-  useEffect(() => {
-    if (user) {
-      setUser(user);
-    }
-  }, [user, setUser]);
-  const unread = 0;
 
   const { data: notifData } = useQuery({
     queryKey: ["admin-notifications"],
@@ -56,34 +50,22 @@ export default function AdminLayout() {
     enabled: !!user,
   });
 
-  const notificationCount = notifData?.data?.unreadCount || unread;
+  const notificationCount = notifData?.data?.unreadCount || 0;
 
-  // Authentication
   useEffect(() => {
-    if (isLoading) return;
-
-    if (!user || !["admin", "manager"].includes(user.role)) {
-      navigate("/login", { replace: true });
+    if (user) {
+      setUser(user);
     }
-  }, [user, isLoading, navigate]);
+  }, [user, setUser]);
 
-  // Socket
+  // Admin socket
   useEffect(() => {
     if (!user?.id) return;
 
-    const socket = connectAdminSocket({
-      onNewOrder: (payload) => {
-        // Refresh orders
-        queryClient.invalidateQueries({
-          queryKey: ["orders"],
-        });
-
-        // Refresh dashboard
-        queryClient.invalidateQueries({
-          queryKey: ["dashboard"],
-        });
-
-        // Refresh notifications
+    connectAdminSocket({
+      onNewOrder: () => {
+        queryClient.invalidateQueries({ queryKey: ["orders"] });
+        queryClient.invalidateQueries({ queryKey: ["dashboard"] });
         queryClient.invalidateQueries({
           queryKey: ["admin-notifications"],
         });
@@ -91,7 +73,6 @@ export default function AdminLayout() {
     });
 
     return () => {
-      // Disconnect when user changes or layout unmounts
       disconnectAdminSocket();
     };
   }, [user?.id, queryClient]);
@@ -101,19 +82,8 @@ export default function AdminLayout() {
     localStorage.setItem("admin_lang", lang);
   };
 
-  if (isLoading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="text-blue-500 text-5xl">
-          <LoadingOutlined />
-        </div>
-      </div>
-    );
-  }
-
   const selected = location.pathname.split("/")[1] || "dashboard";
 
-  // Menu items
   const items = [
     {
       key: "dashboard",
@@ -152,7 +122,7 @@ export default function AdminLayout() {
     },
   ];
 
-  if (user.role === "admin") {
+  if (user?.role === "admin") {
     items.push({
       key: "users",
       icon: <TeamOutlined />,
@@ -162,7 +132,6 @@ export default function AdminLayout() {
 
   return (
     <Layout className="h-screen overflow-hidden">
-      {/* Sidebar */}
       <Sider
         trigger={null}
         collapsible
@@ -171,7 +140,7 @@ export default function AdminLayout() {
         width={220}
         className="h-screen overflow-hidden"
       >
-        <div className="h-14 flex-shrink-0 flex items-center justify-center text-white font-bold text-lg tracking-tight">
+        <div className="h-14 flex items-center justify-center text-white font-bold text-lg">
           {collapsed ? "TS" : "TechStore"}
         </div>
 
@@ -185,9 +154,7 @@ export default function AdminLayout() {
         </div>
       </Sider>
 
-      {/* Main Layout */}
       <Layout className="h-screen min-w-0 overflow-hidden">
-        {/* Header */}
         <Header
           style={{
             background: token.colorBgContainer,
@@ -238,13 +205,12 @@ export default function AdminLayout() {
               }}
             >
               <Button type="text" icon={<UserOutlined />}>
-                {user.first_name || user.email}
+                {user?.first_name || user?.email}
               </Button>
             </Dropdown>
           </div>
         </Header>
 
-        {/* Page Content */}
         <Content className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden bg-gray-50 p-4">
           <div className="min-h-full bg-white rounded-lg p-6">
             <Outlet />

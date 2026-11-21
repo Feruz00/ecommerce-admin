@@ -1,11 +1,11 @@
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { useNavigate } from 'react-router-dom';
-import { message } from 'antd';
-import { login, logout, getMe } from './api';
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useNavigate } from "react-router-dom";
+import { message } from "antd";
+import { login, logout, getMe } from "./api";
 
 export const useMe = () =>
   useQuery({
-    queryKey: ['admin-me'],
+    queryKey: ["admin-me"],
     queryFn: getMe,
     retry: false,
     staleTime: 300000,
@@ -18,14 +18,14 @@ export const useLogin = () => {
     mutationFn: login,
     onSuccess: (d) => {
       const user = d?.data?.user;
-      if (!user || !['admin', 'manager'].includes(user.role)) {
-        message.error('Admin access only');
+      if (!user || !["admin", "manager"].includes(user.role)) {
+        message.error("Admin access only");
         return;
       }
-      qc.setQueryData(['admin-me'], d);
-      nav('/');
+      qc.setQueryData(["admin-me"], d);
+      nav("/");
     },
-    onError: (e) => message.error(e.response?.data?.message || 'Login failed'),
+    onError: (e) => message.error(e.response?.data?.message || "Login failed"),
   });
 };
 
@@ -36,7 +36,8 @@ export const useLogout = () => {
     mutationFn: logout,
     onSuccess: () => {
       qc.clear();
-      nav('/login');
+      // nav("/login");
+      window.location.href = "/login";
     },
   });
 };

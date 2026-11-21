@@ -1,13 +1,13 @@
-import axios from 'axios';
+import axios from "axios";
 
 const api = axios.create({
-  baseURL: import.meta.env.VITE_API_URL || '/api',
+  baseURL: import.meta.env.VITE_API_URL,
   withCredentials: true,
 });
 
 api.interceptors.request.use((config) => {
-  const lang = localStorage.getItem('admin_lang') || 'en';
-  config.headers['Accept-Language'] = lang;
+  const lang = localStorage.getItem("admin_lang") || "en";
+  config.headers["Accept-Language"] = lang;
   return config;
 });
 
