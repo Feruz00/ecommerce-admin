@@ -15,17 +15,20 @@ import {
   TeamOutlined,
   HomeOutlined,
   FormOutlined,
+  LoadingOutlined,
 } from "@ant-design/icons";
 import { useTranslation } from "react-i18next";
 import { useMe, useLogout } from "../pages/auth/hooks";
 import { useQuery } from "@tanstack/react-query";
 import api from "../api/axios";
 import { connectAdminSocket } from "../utils/socket";
+import useAuthStore from "../store/authStore";
 
 const { Header, Sider, Content } = Layout;
 
 export default function AdminLayout() {
   const [collapsed, setCollapsed] = useState(false);
+  const setUser = useAuthStore((state) => state.setUser);
 
   const navigate = useNavigate();
   const location = useLocation();
@@ -37,6 +40,12 @@ export default function AdminLayout() {
   const logoutMutation = useLogout();
 
   const user = meData?.data?.user;
+
+  useEffect(() => {
+    if (user) {
+      setUser(user);
+    }
+  }, [user, setUser]);
   const unread = 0;
 
   const { data: notifData } = useQuery({
@@ -71,10 +80,12 @@ export default function AdminLayout() {
     localStorage.setItem("admin_lang", lang);
   };
 
-  if (isLoading || !user) {
+  if (isLoading) {
     return (
-      <div className="h-screen flex items-center justify-center">
-        <div className="w-10 h-10 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="text-blue-500 text-5xl">
+          <LoadingOutlined />
+        </div>
       </div>
     );
   }
