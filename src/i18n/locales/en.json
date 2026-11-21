@@ -76,7 +76,8 @@
     "banners": "Banners",
     "attributes": "Attributes",
     "orders": "Orders",
-    "users": "Users"
+    "users": "Users",
+    "reports": "Reports"
   },
 
   "dashboard": {
@@ -230,5 +231,68 @@
     "deleted": "Deleted successfully",
     "deactivated": "Deactivated successfully",
     "error": "Something went wrong"
+  },
+  "common": {
+    "refresh": "Refresh",
+    "reset": "Reset"
+  },
+
+  "orderStatus": {
+    "pending": "Pending",
+    "confirmed": "Confirmed",
+    "processing": "Processing",
+    "shipped": "Shipped",
+    "delivered": "Delivered",
+    "cancelled": "Cancelled"
+  },
+
+  "paymentStatus": {
+    "pending": "Pending",
+    "paid": "Paid",
+    "failed": "Failed",
+    "refunded": "Refunded"
+  },
+
+  "paymentMethod": {
+    "cash": "Cash",
+    "card": "Card"
+  },
+
+  "reports": {
+    "title": "Reports",
+    "subtitle": "Sales overview, order analytics and export",
+    "dateRange": "Date range",
+    "orderStatus": "Order status",
+    "paymentStatus": "Payment status",
+    "paymentMethod": "Payment method",
+    "allStatuses": "All statuses",
+    "allPayments": "All payments",
+    "allMethods": "All methods",
+    "totalRevenue": "Total revenue",
+    "totalOrders": "Total orders",
+    "itemsSold": "Items sold",
+    "avgOrderValue": "Avg. order value",
+    "ordersByStatus": "Orders by status",
+    "ordersByPayment": "Orders by payment",
+    "topProducts": "Top products",
+    "topProductsChart": "Top products by revenue",
+    "dailyTrend": "Daily trend",
+    "ordersList": "Orders",
+    "orderNumber": "Order #",
+    "date": "Date",
+    "customer": "Customer",
+    "status": "Status",
+    "payment": "Payment",
+    "items": "Items",
+    "total": "Total",
+    "product": "Product",
+    "qtySold": "Qty sold",
+    "revenue": "Revenue",
+    "orders": "Orders",
+    "noData": "No data for this period",
+    "totalCount": "{{count}} orders",
+    "exportExcel": "Export Excel",
+    "exportSuccess": "Report exported successfully",
+    "exportError": "Could not export report"
   }
 }

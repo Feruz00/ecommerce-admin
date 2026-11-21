@@ -16,12 +16,13 @@ import {
   HomeOutlined,
   FormOutlined,
   LoadingOutlined,
+  BarChartOutlined,
 } from "@ant-design/icons";
 import { useTranslation } from "react-i18next";
 import { useMe, useLogout } from "../pages/auth/hooks";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import api from "../api/axios";
-import { connectAdminSocket } from "../utils/socket";
+import { connectAdminSocket, disconnectAdminSocket } from "../utils/socket";
 import useAuthStore from "../store/authStore";
 
 const { Header, Sider, Content } = Layout;
@@ -29,7 +30,7 @@ const { Header, Sider, Content } = Layout;
 export default function AdminLayout() {
   const [collapsed, setCollapsed] = useState(false);
   const setUser = useAuthStore((state) => state.setUser);
-
+  const queryClient = useQueryClient();
   const navigate = useNavigate();
   const location = useLocation();
 
@@ -68,12 +69,32 @@ export default function AdminLayout() {
 
   // Socket
   useEffect(() => {
-    if (!user) return;
+    if (!user?.id) return;
 
-    const socket = connectAdminSocket(() => {});
+    const socket = connectAdminSocket({
+      onNewOrder: (payload) => {
+        // Refresh orders
+        queryClient.invalidateQueries({
+          queryKey: ["orders"],
+        });
 
-    return () => socket?.disconnect?.();
-  }, [user?.id]);
+        // Refresh dashboard
+        queryClient.invalidateQueries({
+          queryKey: ["dashboard"],
+        });
+
+        // Refresh notifications
+        queryClient.invalidateQueries({
+          queryKey: ["admin-notifications"],
+        });
+      },
+    });
+
+    return () => {
+      // Disconnect when user changes or layout unmounts
+      disconnectAdminSocket();
+    };
+  }, [user?.id, queryClient]);
 
   const changeLang = (lang) => {
     i18n.changeLanguage(lang);
@@ -123,6 +144,11 @@ export default function AdminLayout() {
       key: "orders",
       icon: <ShoppingCartOutlined />,
       label: <Link to="/orders">{t("nav.orders")}</Link>,
+    },
+    {
+      key: "reports",
+      icon: <BarChartOutlined />,
+      label: <Link to="/reports">{t("nav.reports")}</Link>,
     },
   ];
 

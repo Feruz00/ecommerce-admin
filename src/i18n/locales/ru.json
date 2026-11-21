@@ -76,7 +76,8 @@
     "banners": "Баннеры",
     "attributes": "Атрибуты",
     "orders": "Заказы",
-    "users": "Пользователи"
+    "users": "Пользователи",
+    "reports": "Отчёты"
   },
 
   "dashboard": {
@@ -230,5 +231,68 @@
     "deleted": "Успешно удалено",
     "deactivated": "Успешно деактивировано",
     "error": "Произошла ошибка"
+  },
+  "common": {
+    "refresh": "Обновить",
+    "reset": "Сбросить"
+  },
+
+  "orderStatus": {
+    "pending": "Ожидает",
+    "confirmed": "Подтверждён",
+    "processing": "В обработке",
+    "shipped": "Отправлен",
+    "delivered": "Доставлен",
+    "cancelled": "Отменён"
+  },
+
+  "paymentStatus": {
+    "pending": "Ожидает",
+    "paid": "Оплачен",
+    "failed": "Ошибка",
+    "refunded": "Возврат"
+  },
+
+  "paymentMethod": {
+    "cash": "Наличные",
+    "card": "Карта"
+  },
+
+  "reports": {
+    "title": "Отчёты",
+    "subtitle": "Обзор продаж, аналитика заказов и экспорт",
+    "dateRange": "Период",
+    "orderStatus": "Статус заказа",
+    "paymentStatus": "Статус оплаты",
+    "paymentMethod": "Способ оплаты",
+    "allStatuses": "Все статусы",
+    "allPayments": "Все оплаты",
+    "allMethods": "Все способы",
+    "totalRevenue": "Общая выручка",
+    "totalOrders": "Всего заказов",
+    "itemsSold": "Продано единиц",
+    "avgOrderValue": "Средний чек",
+    "ordersByStatus": "Заказы по статусам",
+    "ordersByPayment": "Заказы по оплате",
+    "topProducts": "Топ товаров",
+    "topProductsChart": "Топ товаров по выручке",
+    "dailyTrend": "Динамика по дням",
+    "ordersList": "Заказы",
+    "orderNumber": "№ заказа",
+    "date": "Дата",
+    "customer": "Клиент",
+    "status": "Статус",
+    "payment": "Оплата",
+    "items": "Товары",
+    "total": "Итого",
+    "product": "Товар",
+    "qtySold": "Кол-во",
+    "revenue": "Выручка",
+    "orders": "Заказы",
+    "noData": "Нет данных за этот период",
+    "totalCount": "{{count}} заказов",
+    "exportExcel": "Экспорт в Excel",
+    "exportSuccess": "Отчёт успешно экспортирован",
+    "exportError": "Не удалось экспортировать отчёт"
   }
 }

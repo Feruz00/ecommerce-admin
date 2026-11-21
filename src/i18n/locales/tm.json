@@ -76,7 +76,8 @@
     "banners": "Bannerler",
     "attributes": "Aýratynlyklar",
     "orders": "Sargytlar",
-    "users": "Ulanyjylar"
+    "users": "Ulanyjylar",
+    "reports": "Hasabatlar"
   },
 
   "dashboard": {
@@ -230,5 +231,68 @@
     "deleted": "Üstünlikli pozuldy",
     "deactivated": "Üstünlikli öçürildi",
     "error": "Bir näsazlyk ýüze çykdy"
+  },
+  "common": {
+    "refresh": "Täzele",
+    "reset": "Arassala"
+  },
+
+  "orderStatus": {
+    "pending": "Garaşylýar",
+    "confirmed": "Tassyklanan",
+    "processing": "Işlenýär",
+    "shipped": "Iberilen",
+    "delivered": "Eltip berilen",
+    "cancelled": "Ýatyrylan"
+  },
+
+  "paymentStatus": {
+    "pending": "Garaşylýar",
+    "paid": "Tölenen",
+    "failed": "Şowsuz",
+    "refunded": "Yzyna gaýtarylan"
+  },
+
+  "paymentMethod": {
+    "cash": "Nagt",
+    "card": "Kart"
+  },
+
+  "reports": {
+    "title": "Hasabatlar",
+    "subtitle": "Satyş syny, sargyt analizi we eksport",
+    "dateRange": "Sene aralygy",
+    "orderStatus": "Sargyt ýagdaýy",
+    "paymentStatus": "Töleg ýagdaýy",
+    "paymentMethod": "Töleg usuly",
+    "allStatuses": "Ähli ýagdaýlar",
+    "allPayments": "Ähli tölegler",
+    "allMethods": "Ähli usullar",
+    "totalRevenue": "Jemi girdeji",
+    "totalOrders": "Jemi sargytlar",
+    "itemsSold": "Satylan harytlar",
+    "avgOrderValue": "Ortaça sargyt",
+    "ordersByStatus": "Ýagdaý boýunça sargytlar",
+    "ordersByPayment": "Töleg boýunça sargytlar",
+    "topProducts": "Iň gowy satylan harytlar",
+    "topProductsChart": "Girdeji boýunça iň gowy harytlar",
+    "dailyTrend": "Günlik dinamika",
+    "ordersList": "Sargytlar",
+    "orderNumber": "Sargyt №",
+    "date": "Sene",
+    "customer": "Müşderi",
+    "status": "Ýagdaý",
+    "payment": "Töleg",
+    "items": "Harytlar",
+    "total": "Jemi",
+    "product": "Haryt",
+    "qtySold": "Mukdar",
+    "revenue": "Girdeji",
+    "orders": "Sargytlar",
+    "noData": "Bu döwür üçin maglumat ýok",
+    "totalCount": "{{count}} sargyt",
+    "exportExcel": "Excel-e eksport",
+    "exportSuccess": "Hasabat üstünlikli eksport edildi",
+    "exportError": "Hasabaty eksport edip bolmady"
   }
 }
