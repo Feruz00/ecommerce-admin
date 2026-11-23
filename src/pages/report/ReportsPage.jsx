@@ -69,18 +69,9 @@ const STATUS_TAG_COLORS = {
   cancelled: "default",
 };
 
-const PAYMENT_COLORS = {
-  pending: "#f59e0b",
-  paid: "#10b981",
-  failed: "#ef4444",
-  refunded: "#8b5cf6",
-};
-
-const PAYMENT_TAG_COLORS = {
-  pending: "orange",
-  paid: "success",
-  failed: "error",
-  refunded: "purple",
+const PAYMENT_METHOD_COLORS = {
+  cash: "#10b981",
+  card: "#3b82f6",
 };
 
 const CHART_COLORS = [
@@ -96,25 +87,35 @@ const CHART_COLORS = [
 
 function buildParams(filters, page = 1, limit = 20) {
   const params = { page, limit };
+
   if (filters.range?.[0]) {
     params.start_date = filters.range[0].format("YYYY-MM-DD");
   }
+
   if (filters.range?.[1]) {
     params.end_date = filters.range[1].format("YYYY-MM-DD");
   }
-  if (filters.status) params.status = filters.status;
-  if (filters.payment_status) params.payment_status = filters.payment_status;
-  if (filters.payment_method) params.payment_method = filters.payment_method;
+
+  if (filters.status) {
+    params.status = filters.status;
+  }
+
+  if (filters.payment_method) {
+    params.payment_method = filters.payment_method;
+  }
+
   return params;
 }
 
 function ChartTooltip({ active, payload, label, valueFormatter }) {
   if (!active || !payload?.length) return null;
+
   return (
     <div className="rounded-lg border border-slate-200 bg-white px-3 py-2 shadow-md">
       {label && (
         <div className="mb-1 text-xs font-medium text-slate-500">{label}</div>
       )}
+
       {payload.map((entry) => (
         <div
           key={entry.name}
@@ -124,7 +125,9 @@ function ChartTooltip({ active, payload, label, valueFormatter }) {
             className="inline-block h-2.5 w-2.5 rounded-full"
             style={{ background: entry.color || entry.fill }}
           />
+
           <span className="text-slate-500">{entry.name}:</span>
+
           <span className="font-medium tabular-nums">
             {valueFormatter
               ? valueFormatter(entry.value)
@@ -138,12 +141,13 @@ function ChartTooltip({ active, payload, label, valueFormatter }) {
 
 export default function ReportsPage() {
   const { t } = useTranslation();
+
   const [filters, setFilters] = useState({
     range: [dayjs().subtract(29, "day"), dayjs()],
     status: undefined,
-    payment_status: undefined,
     payment_method: undefined,
   });
+
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(20);
   const [exporting, setExporting] = useState(false);
@@ -153,18 +157,28 @@ export default function ReportsPage() {
     [filters, page, pageSize],
   );
 
+  // ============================================================
+  // QUERIES
+  // ============================================================
+
   const summaryQuery = useQuery({
     queryKey: ["admin-reports-summary", filters],
     queryFn: () =>
       api
-        .get("/reports/summary", { params: buildParams(filters) })
+        .get("/reports/summary", {
+          params: buildParams(filters),
+        })
         .then((r) => r.data),
   });
 
   const ordersQuery = useQuery({
     queryKey: ["admin-reports-orders", queryParams],
     queryFn: () =>
-      api.get("/reports/orders", { params: queryParams }).then((r) => r.data),
+      api
+        .get("/reports/orders", {
+          params: queryParams,
+        })
+        .then((r) => r.data),
   });
 
   const topProductsQuery = useQuery({
@@ -172,7 +186,10 @@ export default function ReportsPage() {
     queryFn: () =>
       api
         .get("/reports/top-products", {
-          params: { ...buildParams(filters), limit: 10 },
+          params: {
+            ...buildParams(filters),
+            limit: 10,
+          },
         })
         .then((r) => r.data),
   });
@@ -181,9 +198,15 @@ export default function ReportsPage() {
     queryKey: ["admin-reports-daily", filters],
     queryFn: () =>
       api
-        .get("/reports/daily", { params: buildParams(filters) })
+        .get("/reports/daily", {
+          params: buildParams(filters),
+        })
         .then((r) => r.data),
   });
+
+  // ============================================================
+  // DATA
+  // ============================================================
 
   const summary = summaryQuery.data?.data?.summary || {};
   const orders = ordersQuery.data?.data?.orders || [];
@@ -191,12 +214,16 @@ export default function ReportsPage() {
   const topProducts = topProductsQuery.data?.data?.products || [];
   const daily = dailyQuery.data?.data?.daily || [];
 
+  // ============================================================
+  // CHART DATA
+  // ============================================================
+
   const dailyChartData = useMemo(
     () =>
       daily.map((row) => ({
         date: dayjs(row.date).format("MM/DD"),
         fullDate: dayjs(row.date).format("YYYY-MM-DD"),
-        orders: row.orders,
+        orders: Number(row.orders) || 0,
         revenue: Number(row.revenue) || 0,
       })),
     [daily],
@@ -204,6 +231,7 @@ export default function ReportsPage() {
 
   const statusChartData = useMemo(() => {
     if (!summary.by_status) return [];
+
     return Object.entries(summary.by_status).map(([status, count]) => ({
       name: t(`orderStatus.${status}`, status),
       value: Number(count) || 0,
@@ -212,35 +240,46 @@ export default function ReportsPage() {
     }));
   }, [summary.by_status, t]);
 
+  // Payment method instead of payment status.
   const paymentChartData = useMemo(() => {
-    if (!summary.by_payment) return [];
-    return Object.entries(summary.by_payment).map(([status, count]) => ({
-      name: t(`paymentStatus.${status}`, status),
+    if (!summary.by_payment_method) return [];
+
+    return Object.entries(summary.by_payment_method).map(([method, count]) => ({
+      name: t(`paymentMethod.${method}`, method),
       value: Number(count) || 0,
-      status,
-      color: PAYMENT_COLORS[status] || "#94a3b8",
+      method,
+      color: PAYMENT_METHOD_COLORS[method] || "#94a3b8",
     }));
-  }, [summary.by_payment, t]);
+  }, [summary.by_payment_method, t]);
 
   const topProductsChartData = useMemo(
     () =>
       [...topProducts]
         .slice(0, 8)
         .reverse()
-        .map((p) => ({
-          name:
-            (p.name || p.sku || "—").length > 22
-              ? `${(p.name || p.sku).slice(0, 20)}…`
-              : p.name || p.sku || "—",
-          fullName: p.name || p.sku || "—",
-          revenue: Number(p.revenue) || 0,
-          quantity: Number(p.quantity_sold) || 0,
-        })),
+        .map((p) => {
+          const name = p.name || p.sku || "—";
+
+          return {
+            name: name.length > 22 ? `${name.slice(0, 20)}…` : name,
+            fullName: name,
+            revenue: Number(p.revenue) || 0,
+            quantity: Number(p.quantity_sold) || 0,
+          };
+        }),
     [topProducts],
   );
 
+  // ============================================================
+  // FILTERS
+  // ============================================================
+
   const handleFilterChange = (key, value) => {
-    setFilters((prev) => ({ ...prev, [key]: value }));
+    setFilters((prev) => ({
+      ...prev,
+      [key]: value,
+    }));
+
     setPage(1);
   };
 
@@ -248,11 +287,26 @@ export default function ReportsPage() {
     setFilters({
       range: [dayjs().subtract(29, "day"), dayjs()],
       status: undefined,
-      payment_status: undefined,
       payment_method: undefined,
     });
+
     setPage(1);
   };
+
+  // ============================================================
+  // REFRESH
+  // ============================================================
+
+  const handleRefresh = () => {
+    summaryQuery.refetch();
+    ordersQuery.refetch();
+    topProductsQuery.refetch();
+    dailyQuery.refetch();
+  };
+
+  // ============================================================
+  // EXCEL EXPORT
+  // ============================================================
 
   const handleExport = async () => {
     setExporting(true);
@@ -290,13 +344,13 @@ export default function ReportsPage() {
         "Could not export Excel report",
       );
 
-      // Handle errors returned as Blob
       if (error.response?.data instanceof Blob) {
         try {
           const errorData = JSON.parse(await error.response.data.text());
+
           errorMessage = errorData.message || errorMessage;
         } catch {
-          // Keep fallback error message
+          // Keep fallback message.
         }
       } else {
         errorMessage = error.response?.data?.message || errorMessage;
@@ -308,20 +362,25 @@ export default function ReportsPage() {
     }
   };
 
+  // ============================================================
+  // TABLE COLUMNS
+  // ============================================================
+
   const orderColumns = [
     {
       title: t("reports.orderNumber", "Order #"),
       dataIndex: "order_number",
       key: "order_number",
       width: 140,
-      render: (v) => <Text strong>{v}</Text>,
+      render: (value) => <Text strong>{value}</Text>,
     },
     {
       title: t("reports.date", "Date"),
       dataIndex: "created_at",
       key: "created_at",
       width: 160,
-      render: (v) => (v ? dayjs(v).format("YYYY-MM-DD HH:mm") : "—"),
+      render: (value) =>
+        value ? dayjs(value).format("YYYY-MM-DD HH:mm") : "—",
     },
     {
       title: t("reports.customer", "Customer"),
@@ -332,6 +391,7 @@ export default function ReportsPage() {
           <div className="font-medium text-slate-800">
             {row.customer_name || "—"}
           </div>
+
           {(row.user?.phone || row.shipping_address?.phone) && (
             <div className="text-xs text-slate-400">
               {row.user?.phone || row.shipping_address?.phone}
@@ -347,18 +407,18 @@ export default function ReportsPage() {
       width: 120,
       render: (status) => (
         <Tag color={STATUS_TAG_COLORS[status] || "default"}>
-          {t(`orderStatus.${status}`, status)}
+          {status ? t(`orderStatus.${status}`, status) : "—"}
         </Tag>
       ),
     },
     {
-      title: t("reports.payment", "Payment"),
-      dataIndex: "payment_status",
-      key: "payment_status",
-      width: 110,
-      render: (status) => (
-        <Tag color={PAYMENT_TAG_COLORS[status] || "default"}>
-          {t(`paymentStatus.${status}`, status)}
+      title: t("reports.paymentMethod", "Payment method"),
+      dataIndex: "payment_method",
+      key: "payment_method",
+      width: 140,
+      render: (method) => (
+        <Tag color={PAYMENT_METHOD_COLORS[method] ? "blue" : "default"}>
+          {method ? t(`paymentMethod.${method}`, method) : "—"}
         </Tag>
       ),
     },
@@ -368,7 +428,7 @@ export default function ReportsPage() {
       key: "items_count",
       width: 80,
       align: "right",
-      render: (v) => <span className="tabular-nums">{v ?? 0}</span>,
+      render: (value) => <span className="tabular-nums">{value ?? 0}</span>,
     },
     {
       title: t("reports.total", "Total"),
@@ -376,9 +436,9 @@ export default function ReportsPage() {
       key: "total",
       width: 120,
       align: "right",
-      render: (v) => (
+      render: (value) => (
         <span className="font-medium tabular-nums text-slate-800">
-          {money(v)}
+          {money(value)}
         </span>
       ),
     },
@@ -400,6 +460,7 @@ export default function ReportsPage() {
       render: (_, row) => (
         <div>
           <div className="truncate font-medium text-slate-800">{row.name}</div>
+
           {row.sku && <div className="text-xs text-slate-400">{row.sku}</div>}
         </div>
       ),
@@ -410,7 +471,7 @@ export default function ReportsPage() {
       key: "quantity_sold",
       width: 90,
       align: "right",
-      render: (v) => <span className="tabular-nums">{v}</span>,
+      render: (value) => <span className="tabular-nums">{value}</span>,
     },
     {
       title: t("reports.revenue", "Revenue"),
@@ -418,11 +479,15 @@ export default function ReportsPage() {
       key: "revenue",
       width: 120,
       align: "right",
-      render: (v) => (
-        <span className="font-medium tabular-nums">{money(v)}</span>
+      render: (value) => (
+        <span className="font-medium tabular-nums">{money(value)}</span>
       ),
     },
   ];
+
+  // ============================================================
+  // RENDER
+  // ============================================================
 
   return (
     <div className="space-y-5">
@@ -432,6 +497,7 @@ export default function ReportsPage() {
           <Title level={3} className="!mb-1 !text-slate-800">
             {t("reports.title", "Reports")}
           </Title>
+
           <Text type="secondary">
             {t(
               "reports.subtitle",
@@ -439,18 +505,12 @@ export default function ReportsPage() {
             )}
           </Text>
         </div>
+
         <Space wrap>
-          <Button
-            icon={<ReloadOutlined />}
-            onClick={() => {
-              summaryQuery.refetch();
-              ordersQuery.refetch();
-              topProductsQuery.refetch();
-              dailyQuery.refetch();
-            }}
-          >
+          <Button icon={<ReloadOutlined />} onClick={handleRefresh}>
             {t("common.refresh", "Refresh")}
           </Button>
+
           <Button
             type="primary"
             icon={<DownloadOutlined />}
@@ -470,9 +530,10 @@ export default function ReportsPage() {
               <FilterOutlined className="mr-1" />
               {t("reports.dateRange", "Date range")}
             </div>
+
             <RangePicker
               value={filters.range}
-              onChange={(val) => handleFilterChange("range", val)}
+              onChange={(value) => handleFilterChange("range", value)}
               allowClear={false}
               format="YYYY-MM-DD"
               className="w-full min-w-[260px]"
@@ -483,11 +544,12 @@ export default function ReportsPage() {
             <div className="mb-1 text-xs font-medium text-slate-500">
               {t("reports.orderStatus", "Order status")}
             </div>
+
             <Select
               allowClear
               placeholder={t("reports.allStatuses", "All statuses")}
               value={filters.status}
-              onChange={(val) => handleFilterChange("status", val)}
+              onChange={(value) => handleFilterChange("status", value)}
               style={{ minWidth: 150 }}
               options={[
                 {
@@ -520,45 +582,24 @@ export default function ReportsPage() {
 
           <div>
             <div className="mb-1 text-xs font-medium text-slate-500">
-              {t("reports.paymentStatus", "Payment status")}
-            </div>
-            <Select
-              allowClear
-              placeholder={t("reports.allPayments", "All payments")}
-              value={filters.payment_status}
-              onChange={(val) => handleFilterChange("payment_status", val)}
-              style={{ minWidth: 150 }}
-              options={[
-                {
-                  value: "pending",
-                  label: t("paymentStatus.pending", "Pending"),
-                },
-                { value: "paid", label: t("paymentStatus.paid", "Paid") },
-                {
-                  value: "failed",
-                  label: t("paymentStatus.failed", "Failed"),
-                },
-                {
-                  value: "refunded",
-                  label: t("paymentStatus.refunded", "Refunded"),
-                },
-              ]}
-            />
-          </div>
-
-          <div>
-            <div className="mb-1 text-xs font-medium text-slate-500">
               {t("reports.paymentMethod", "Payment method")}
             </div>
+
             <Select
               allowClear
               placeholder={t("reports.allMethods", "All methods")}
               value={filters.payment_method}
-              onChange={(val) => handleFilterChange("payment_method", val)}
+              onChange={(value) => handleFilterChange("payment_method", value)}
               style={{ minWidth: 130 }}
               options={[
-                { value: "cash", label: t("paymentMethod.cash", "Cash") },
-                { value: "card", label: t("paymentMethod.card", "Card") },
+                {
+                  value: "cash",
+                  label: t("paymentMethod.cash", "Cash"),
+                },
+                {
+                  value: "card",
+                  label: t("paymentMethod.card", "Card"),
+                },
               ]}
             />
           </div>
@@ -567,13 +608,13 @@ export default function ReportsPage() {
         </div>
       </Card>
 
-      {/* KPI cards */}
+      {/* KPI Cards */}
       <Row gutter={[16, 16]}>
         <Col xs={24} sm={12} lg={6}>
           <Card bordered={false} className="!rounded-2xl !shadow-sm">
             <Statistic
               title={t("reports.totalRevenue", "Total revenue")}
-              value={summary.total_revenue || 0}
+              value={Number(summary.total_revenue) || 0}
               precision={2}
               suffix="TMT"
               prefix={<DollarOutlined className="text-emerald-500" />}
@@ -582,31 +623,34 @@ export default function ReportsPage() {
             />
           </Card>
         </Col>
+
         <Col xs={24} sm={12} lg={6}>
           <Card bordered={false} className="!rounded-2xl !shadow-sm">
             <Statistic
               title={t("reports.totalOrders", "Total orders")}
-              value={summary.total_orders || 0}
+              value={Number(summary.total_orders) || 0}
               prefix={<ShoppingCartOutlined className="text-blue-500" />}
               loading={summaryQuery.isLoading}
             />
           </Card>
         </Col>
+
         <Col xs={24} sm={12} lg={6}>
           <Card bordered={false} className="!rounded-2xl !shadow-sm">
             <Statistic
               title={t("reports.itemsSold", "Items sold")}
-              value={summary.items_sold || 0}
+              value={Number(summary.items_sold) || 0}
               prefix={<BarChartOutlined className="text-violet-500" />}
               loading={summaryQuery.isLoading}
             />
           </Card>
         </Col>
+
         <Col xs={24} sm={12} lg={6}>
           <Card bordered={false} className="!rounded-2xl !shadow-sm">
             <Statistic
               title={t("reports.avgOrderValue", "Avg. order value")}
-              value={summary.avg_order_value || 0}
+              value={Number(summary.avg_order_value) || 0}
               precision={2}
               suffix="TMT"
               prefix={<RiseOutlined className="text-amber-500" />}
@@ -616,7 +660,7 @@ export default function ReportsPage() {
         </Col>
       </Row>
 
-      {/* Daily trend chart */}
+      {/* Daily Trend */}
       <Card
         bordered={false}
         className="!rounded-2xl !shadow-sm"
@@ -631,34 +675,44 @@ export default function ReportsPage() {
             <ResponsiveContainer width="100%" height="100%">
               <AreaChart
                 data={dailyChartData}
-                margin={{ top: 10, right: 16, left: 0, bottom: 0 }}
+                margin={{
+                  top: 10,
+                  right: 16,
+                  left: 0,
+                  bottom: 0,
+                }}
               >
                 <defs>
                   <linearGradient id="colorRevenue" x1="0" y1="0" x2="0" y2="1">
                     <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.25} />
                     <stop offset="95%" stopColor="#3b82f6" stopOpacity={0} />
                   </linearGradient>
+
                   <linearGradient id="colorOrders" x1="0" y1="0" x2="0" y2="1">
                     <stop offset="5%" stopColor="#10b981" stopOpacity={0.2} />
                     <stop offset="95%" stopColor="#10b981" stopOpacity={0} />
                   </linearGradient>
                 </defs>
+
                 <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+
                 <XAxis
                   dataKey="date"
                   tick={{ fontSize: 12, fill: "#64748b" }}
                   axisLine={{ stroke: "#e2e8f0" }}
                   tickLine={false}
                 />
+
                 <YAxis
                   yAxisId="revenue"
                   tick={{ fontSize: 12, fill: "#64748b" }}
                   axisLine={false}
                   tickLine={false}
-                  tickFormatter={(v) =>
-                    v >= 1000 ? `${(v / 1000).toFixed(0)}k` : v
+                  tickFormatter={(value) =>
+                    value >= 1000 ? `${(value / 1000).toFixed(0)}k` : value
                   }
                 />
+
                 <YAxis
                   yAxisId="orders"
                   orientation="right"
@@ -667,24 +721,27 @@ export default function ReportsPage() {
                   tickLine={false}
                   allowDecimals={false}
                 />
+
                 <Tooltip
                   content={
                     <ChartTooltip
-                      valueFormatter={(v) =>
-                        typeof v === "number" && v > 50
-                          ? money(v)
-                          : Number(v).toLocaleString()
+                      valueFormatter={(value, name) =>
+                        name === t("reports.revenue", "Revenue")
+                          ? money(value)
+                          : Number(value).toLocaleString()
                       }
                     />
                   }
-                  labelFormatter={(_, payload) =>
-                    payload?.[0]?.payload?.fullDate || ""
-                  }
                 />
+
                 <Legend
-                  wrapperStyle={{ fontSize: 13, paddingTop: 8 }}
+                  wrapperStyle={{
+                    fontSize: 13,
+                    paddingTop: 8,
+                  }}
                   iconType="circle"
                 />
+
                 <Area
                   yAxisId="revenue"
                   type="monotone"
@@ -694,6 +751,7 @@ export default function ReportsPage() {
                   strokeWidth={2}
                   fill="url(#colorRevenue)"
                 />
+
                 <Area
                   yAxisId="orders"
                   type="monotone"
@@ -714,8 +772,9 @@ export default function ReportsPage() {
         )}
       </Card>
 
-      {/* Status + Payment pie charts */}
+      {/* Order Status + Payment Method */}
       <Row gutter={[16, 16]}>
+        {/* Orders by status */}
         <Col xs={24} lg={12}>
           <Card
             bordered={false}
@@ -746,20 +805,25 @@ export default function ReportsPage() {
                           <Cell key={entry.status} fill={entry.color} />
                         ))}
                       </Pie>
+
                       <Tooltip
                         content={
                           <ChartTooltip
-                            valueFormatter={(v) => Number(v).toLocaleString()}
+                            valueFormatter={(value) =>
+                              Number(value).toLocaleString()
+                            }
                           />
                         }
                       />
                     </PieChart>
                   </ResponsiveContainer>
                 </div>
+
                 <div className="flex-1 space-y-2.5">
                   {statusChartData.map((item) => {
-                    const total = summary.total_orders || 1;
+                    const total = Number(summary.total_orders) || 1;
                     const pct = Math.round((item.value / total) * 100);
+
                     return (
                       <div
                         key={item.status}
@@ -770,8 +834,10 @@ export default function ReportsPage() {
                             className="inline-block h-2.5 w-2.5 shrink-0 rounded-full"
                             style={{ background: item.color }}
                           />
+
                           <span className="text-slate-600">{item.name}</span>
                         </div>
+
                         <span className="tabular-nums text-slate-800">
                           {item.value}{" "}
                           <span className="text-slate-400">({pct}%)</span>
@@ -790,13 +856,14 @@ export default function ReportsPage() {
           </Card>
         </Col>
 
+        {/* Orders by payment method */}
         <Col xs={24} lg={12}>
           <Card
             bordered={false}
             className="!rounded-2xl !shadow-sm h-full"
             title={
               <span className="font-semibold text-slate-800">
-                {t("reports.ordersByPayment", "Orders by payment")}
+                {t("reports.ordersByPaymentMethod", "Orders by payment method")}
               </span>
             }
           >
@@ -817,26 +884,31 @@ export default function ReportsPage() {
                         stroke="none"
                       >
                         {paymentChartData.map((entry) => (
-                          <Cell key={entry.status} fill={entry.color} />
+                          <Cell key={entry.method} fill={entry.color} />
                         ))}
                       </Pie>
+
                       <Tooltip
                         content={
                           <ChartTooltip
-                            valueFormatter={(v) => Number(v).toLocaleString()}
+                            valueFormatter={(value) =>
+                              Number(value).toLocaleString()
+                            }
                           />
                         }
                       />
                     </PieChart>
                   </ResponsiveContainer>
                 </div>
+
                 <div className="flex-1 space-y-2.5">
                   {paymentChartData.map((item) => {
-                    const total = summary.total_orders || 1;
+                    const total = Number(summary.total_orders) || 1;
                     const pct = Math.round((item.value / total) * 100);
+
                     return (
                       <div
-                        key={item.status}
+                        key={item.method}
                         className="flex items-center justify-between gap-3 text-sm"
                       >
                         <div className="flex items-center gap-2">
@@ -844,8 +916,10 @@ export default function ReportsPage() {
                             className="inline-block h-2.5 w-2.5 shrink-0 rounded-full"
                             style={{ background: item.color }}
                           />
+
                           <span className="text-slate-600">{item.name}</span>
                         </div>
+
                         <span className="tabular-nums text-slate-800">
                           {item.value}{" "}
                           <span className="text-slate-400">({pct}%)</span>
@@ -865,7 +939,7 @@ export default function ReportsPage() {
         </Col>
       </Row>
 
-      {/* Top products bar chart + table */}
+      {/* Top Products Chart + Table */}
       <Row gutter={[16, 16]}>
         <Col xs={24} lg={14}>
           <Card
@@ -883,22 +957,29 @@ export default function ReportsPage() {
                   <BarChart
                     data={topProductsChartData}
                     layout="vertical"
-                    margin={{ top: 4, right: 24, left: 8, bottom: 4 }}
+                    margin={{
+                      top: 4,
+                      right: 24,
+                      left: 8,
+                      bottom: 4,
+                    }}
                   >
                     <CartesianGrid
                       strokeDasharray="3 3"
                       stroke="#e2e8f0"
                       horizontal={false}
                     />
+
                     <XAxis
                       type="number"
                       tick={{ fontSize: 12, fill: "#64748b" }}
                       axisLine={false}
                       tickLine={false}
-                      tickFormatter={(v) =>
-                        v >= 1000 ? `${(v / 1000).toFixed(0)}k` : v
+                      tickFormatter={(value) =>
+                        value >= 1000 ? `${(value / 1000).toFixed(0)}k` : value
                       }
                     />
+
                     <YAxis
                       type="category"
                       dataKey="name"
@@ -907,12 +988,18 @@ export default function ReportsPage() {
                       axisLine={false}
                       tickLine={false}
                     />
+
                     <Tooltip
                       content={
-                        <ChartTooltip valueFormatter={(v) => money(v)} />
+                        <ChartTooltip
+                          valueFormatter={(value) => money(value)}
+                        />
                       }
-                      cursor={{ fill: "rgba(148, 163, 184, 0.08)" }}
+                      cursor={{
+                        fill: "rgba(148, 163, 184, 0.08)",
+                      }}
                     />
+
                     <Bar
                       dataKey="revenue"
                       name={t("reports.revenue", "Revenue")}
@@ -969,7 +1056,7 @@ export default function ReportsPage() {
         </Col>
       </Row>
 
-      {/* Orders table */}
+      {/* Orders Table */}
       <Card
         bordered={false}
         className="!rounded-2xl !shadow-sm"
@@ -984,7 +1071,7 @@ export default function ReportsPage() {
           loading={ordersQuery.isLoading}
           columns={orderColumns}
           dataSource={orders}
-          scroll={{ x: 900 }}
+          scroll={{ x: 950 }}
           pagination={{
             current: page,
             pageSize,
@@ -992,9 +1079,11 @@ export default function ReportsPage() {
             showSizeChanger: true,
             pageSizeOptions: [10, 20, 50, 100],
             showTotal: (total) =>
-              t("reports.totalCount", "{{count}} orders", { count: total }),
-            onChange: (p, size) => {
-              setPage(p);
+              t("reports.totalCount", "{{count}} orders", {
+                count: total,
+              }),
+            onChange: (currentPage, size) => {
+              setPage(currentPage);
               setPageSize(size);
             },
           }}

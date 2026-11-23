@@ -1,22 +1,42 @@
-export const requestNotificationPermission = async () => {
-  if (!('Notification' in window)) return false;
-  if (Notification.permission === 'granted') return true;
-  if (Notification.permission !== 'denied') {
-    const permission = await Notification.requestPermission();
-    return permission === 'granted';
+export async function requestNotificationPermission() {
+  if (!("Notification" in window)) {
+    console.warn("Browser notifications are not supported");
+    return "unsupported";
   }
-  return false;
-};
 
-export const showChromeNotification = (title, options = {}) => {
-  if (!('Notification' in window) || Notification.permission !== 'granted') return;
-  const n = new Notification(title, {
-    icon: '/vite.svg',
-    badge: '/vite.svg',
+  if (Notification.permission === "granted") {
+    return "granted";
+  }
+
+  if (Notification.permission === "denied") {
+    return "denied";
+  }
+
+  return Notification.requestPermission();
+}
+
+export function showChromeNotification(title, options = {}) {
+  if (!("Notification" in window)) return null;
+
+  if (Notification.permission !== "granted") {
+    return null;
+  }
+
+  const notification = new Notification(title, {
+    body: options.body || "",
+    icon: "/favicon.ico",
+    tag: options.tag || "admin-notification",
     ...options,
   });
-  n.onclick = () => {
+
+  notification.onclick = () => {
     window.focus();
-    n.close();
+    notification.close();
+
+    if (options.url) {
+      window.location.href = options.url;
+    }
   };
-};
+
+  return notification;
+}

@@ -1,180 +1,466 @@
-import { useState } from 'react';
+import { useMemo, useState } from "react";
 import {
-  Table, Button, Tag, Modal, Form, Input, InputNumber, Select, Switch,
-  Space, Typography, Spin, Popconfirm, Upload, Image, message,
-} from 'antd';
-import { PlusOutlined, EditOutlined, DeleteOutlined, UploadOutlined, LoadingOutlined } from '@ant-design/icons';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import api from '../../api/axios';
+  Table,
+  Button,
+  Tag,
+  Modal,
+  Form,
+  Input,
+  InputNumber,
+  Select,
+  Switch,
+  Space,
+  Typography,
+  Spin,
+  Popconfirm,
+  Upload,
+  Image,
+  message,
+} from "antd";
+import {
+  PlusOutlined,
+  EditOutlined,
+  DeleteOutlined,
+  UploadOutlined,
+  LoadingOutlined,
+} from "@ant-design/icons";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useTranslation } from "react-i18next";
+import api from "../../api/axios";
 
 const { Title } = Typography;
 
 async function uploadImage(file) {
   const fd = new FormData();
-  fd.append('image', file);
-  fd.append('entity_type', 'categories');
-  fd.append('is_primary', 'true');
-  const { data } = await api.post('/files/upload', fd, { headers: { 'Content-Type': 'multipart/form-data' } });
+
+  fd.append("image", file);
+  fd.append("entity_type", "categories");
+  fd.append("is_primary", "true");
+
+  const { data } = await api.post("/files/upload", fd, {
+    headers: { "Content-Type": "multipart/form-data" },
+  });
+
   return data.data.file;
 }
 
+function getCategoryName(category, language) {
+  return (
+    category?.translations?.[language]?.name ||
+    category?.translations?.en?.name ||
+    category?.name ||
+    `#${category?.id}`
+  );
+}
+
+function flattenCategories(categories, result = []) {
+  (categories || []).forEach((category) => {
+    result.push(category);
+
+    if (category.children?.length) {
+      flattenCategories(category.children, result);
+    }
+  });
+
+  return result;
+}
+
+function getDescendantIds(category) {
+  const ids = new Set();
+
+  const walk = (item) => {
+    (item.children || []).forEach((child) => {
+      ids.add(child.id);
+      walk(child);
+    });
+  };
+
+  walk(category);
+  return ids;
+}
+
 export default function CategoriesPage() {
+  const { t, i18n } = useTranslation();
+  const language = i18n.language?.slice(0, 2) || "en";
+
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState(null);
   const [uploading, setUploading] = useState(false);
-  const [previewUrl, setPreviewUrl] = useState('');
+  const [previewUrl, setPreviewUrl] = useState("");
+
   const [form] = Form.useForm();
   const qc = useQueryClient();
 
   const { data, isLoading } = useQuery({
-    queryKey: ['admin-categories'],
-    queryFn: () => api.get('/categories').then((r) => r.data),
+    queryKey: ["admin-categories"],
+    queryFn: () => api.get("/categories").then((res) => res.data),
   });
+
+  const invalidateCategories = () =>
+    qc.invalidateQueries({ queryKey: ["admin-categories"] });
 
   const createMut = useMutation({
-    mutationFn: (v) => api.post('/categories', v),
-    onSuccess: () => { qc.invalidateQueries(['admin-categories']); message.success('Created'); setOpen(false); },
+    mutationFn: (values) => api.post("/categories", values),
+    onSuccess: () => {
+      invalidateCategories();
+      message.success(t("categories.created"));
+      setOpen(false);
+    },
+    onError: (error) => {
+      message.error(
+        error.response?.data?.message || t("categories.createFailed"),
+      );
+    },
   });
+
   const updateMut = useMutation({
-    mutationFn: ({ id, ...v }) => api.patch(`/categories/${id}`, v),
-    onSuccess: () => { qc.invalidateQueries(['admin-categories']); message.success('Updated'); setOpen(false); },
+    mutationFn: ({ id, ...values }) => api.patch(`/categories/${id}`, values),
+    onSuccess: () => {
+      invalidateCategories();
+      message.success(t("categories.updated"));
+      setOpen(false);
+    },
+    onError: (error) => {
+      message.error(
+        error.response?.data?.message || t("categories.updateFailed"),
+      );
+    },
   });
+
   const deleteMut = useMutation({
     mutationFn: (id) => api.delete(`/categories/${id}`),
-    onSuccess: () => { qc.invalidateQueries(['admin-categories']); message.success('Deleted'); },
+    onSuccess: () => {
+      invalidateCategories();
+      message.success(t("categories.deleted"));
+    },
+    onError: (error) => {
+      message.error(
+        error.response?.data?.message || t("categories.deleteFailed"),
+      );
+    },
   });
 
+  // The API returns a nested category tree.
   const categories = data?.data?.categories || [];
-  // Flatten tree for table
-  const flat = [];
-  const walk = (list, level = 0) => {
-    (list || []).forEach((c) => {
-      flat.push({ ...c, level });
-      if (c.children?.length) walk(c.children, level + 1);
-    });
-  };
-  // categories from getAll might not be tree - handle both
-  if (categories.some((c) => c.children)) walk(categories.filter((c) => !c.parent_id));
-  else categories.forEach((c) => flat.push({ ...c, level: c.parent_id ? 1 : 0 }));
 
-  const parentOptions = categories
-    .filter((c) => !editing || c.id !== editing.id)
-    .map((c) => ({ value: c.id, label: c.name || c.slug }));
+  const allCategories = useMemo(
+    () => flattenCategories(categories),
+    [categories],
+  );
 
-  const openForm = (record) => {
-    setEditing(record || null);
-    setPreviewUrl(record?.image || '');
+  // Exclude the current category and all its descendants from parent options.
+  const parentOptions = useMemo(() => {
+    const excludedIds = editing ? getDescendantIds(editing) : new Set();
+
+    if (editing) excludedIds.add(editing.id);
+
+    return allCategories
+      .filter((category) => !excludedIds.has(category.id))
+      .map((category) => ({
+        value: category.id,
+        label: `${"— ".repeat(
+          getCategoryDepth(category, categories),
+        )}${getCategoryName(category, language)}`,
+      }));
+  }, [allCategories, editing, categories, language]);
+
+  function openForm(record = null) {
+    setEditing(record);
+    setPreviewUrl(record?.image || "");
+
+    form.resetFields();
+
     if (record) {
       form.setFieldsValue({
-        slug: record.slug,
-        parent_id: record.parent_id,
-        sort_order: record.sort_order,
+        parent_id: record.parent_id ?? undefined,
+        sort_order: record.sort_order ?? 0,
         is_active: record.is_active,
-        name_en: record.translations?.en?.name || record.name,
-        name_tm: record.translations?.tm?.name,
-        name_ru: record.translations?.ru?.name,
-        image_file_id: record.image_file_id,
+        name_en: record.translations?.en?.name || "",
+        name_tm: record.translations?.tm?.name || "",
+        name_ru: record.translations?.ru?.name || "",
+        image_file_id: record.image_file_id || undefined,
       });
     } else {
-      form.resetFields();
-      form.setFieldsValue({ is_active: true, sort_order: 0 });
+      form.setFieldsValue({
+        is_active: true,
+        sort_order: 0,
+        parent_id: undefined,
+        image_file_id: undefined,
+      });
     }
-    setOpen(true);
-  };
 
-  const handleUpload = async (file) => {
+    setOpen(true);
+  }
+
+  async function handleUpload(file) {
     setUploading(true);
+
     try {
       const uploaded = await uploadImage(file);
-      form.setFieldsValue({ image_file_id: uploaded.id });
+
+      form.setFieldsValue({
+        image_file_id: uploaded.id,
+      });
+
       setPreviewUrl(uploaded.url);
-      message.success('Image uploaded');
-    } catch (e) {
-      message.error(e.response?.data?.message || 'Upload failed');
+
+      message.success(t("categories.imageUploaded"));
+    } catch (error) {
+      message.error(
+        error.response?.data?.message || t("categories.uploadFailed"),
+      );
     } finally {
       setUploading(false);
     }
-    return false;
-  };
 
-  const onFinish = (v) => {
+    return false;
+  }
+
+  function onFinish(values) {
     const payload = {
-      slug: v.slug,
-      parent_id: v.parent_id || null,
-      sort_order: v.sort_order || 0,
-      is_active: v.is_active,
-      image_file_id: v.image_file_id || null,
+      parent_id: values.parent_id || null,
+      sort_order: values.sort_order ?? 0,
+      is_active: values.is_active ?? true,
+      image_file_id: values.image_file_id || null,
       translations: {
-        en: { name: v.name_en },
-        tm: { name: v.name_tm || v.name_en },
-        ru: { name: v.name_ru || v.name_en },
+        en: {
+          name: values.name_en.trim(),
+        },
+        tm: {
+          name: values.name_tm?.trim() || values.name_en.trim(),
+        },
+        ru: {
+          name: values.name_ru?.trim() || values.name_en.trim(),
+        },
       },
     };
-    if (editing) updateMut.mutate({ id: editing.id, ...payload });
-    else createMut.mutate(payload);
-  };
+
+    if (editing) {
+      updateMut.mutate({
+        id: editing.id,
+        ...payload,
+      });
+    } else {
+      createMut.mutate(payload);
+    }
+  }
+
+  const columns = [
+    {
+      title: t("categories.name"),
+      key: "name",
+      render: (_, record) => (
+        <div className="flex items-center gap-3">
+          {record.image && (
+            <Image
+              src={record.image}
+              width={36}
+              height={36}
+              className="rounded object-cover"
+              preview
+            />
+          )}
+
+          <span className="font-medium">
+            {getCategoryName(record, language)}
+          </span>
+        </div>
+      ),
+    },
+    {
+      title: t("categories.status"),
+      dataIndex: "is_active",
+      key: "is_active",
+      width: 120,
+      render: (value) => (
+        <Tag color={value ? "green" : "red"}>
+          {value ? t("categories.active") : t("categories.inactive")}
+        </Tag>
+      ),
+    },
+    {
+      title: t("categories.sortOrder"),
+      dataIndex: "sort_order",
+      key: "sort_order",
+      width: 120,
+    },
+    {
+      title: t("categories.actions"),
+      key: "actions",
+      width: 120,
+      render: (_, record) => (
+        <Space>
+          <Button
+            size="small"
+            icon={<EditOutlined />}
+            onClick={() => openForm(record)}
+          />
+
+          <Popconfirm
+            title={t("categories.deleteConfirm")}
+            description={t("categories.deleteDescription")}
+            okText={t("categories.delete")}
+            cancelText={t("categories.cancel")}
+            okButtonProps={{ danger: true }}
+            onConfirm={() => deleteMut.mutate(record.id)}
+          >
+            <Button
+              size="small"
+              danger
+              icon={<DeleteOutlined />}
+              loading={deleteMut.isPending && deleteMut.variables === record.id}
+            />
+          </Popconfirm>
+        </Space>
+      ),
+    },
+  ];
 
   return (
     <div>
-      <div className="flex justify-between items-center mb-6">
-        <Title level={3} className="!mb-0">Categories</Title>
-        <Button type="primary" icon={<PlusOutlined />} onClick={() => openForm()}>Add Category</Button>
+      <div className="flex justify-between items-center mb-6 gap-3">
+        <Title level={3} className="!mb-0">
+          {t("categories.title")}
+        </Title>
+
+        <Button
+          type="primary"
+          icon={<PlusOutlined />}
+          onClick={() => openForm()}
+        >
+          {t("categories.addCategory")}
+        </Button>
       </div>
-      {isLoading ? <Spin className="flex justify-center py-20" size="large" /> : (
+
+      {isLoading ? (
+        <Spin className="flex justify-center py-20" size="large" />
+      ) : (
         <Table
-          dataSource={flat.length ? flat : categories}
+          dataSource={categories}
           rowKey="id"
+          columns={columns}
           pagination={false}
-          columns={[
-            {
-              title: 'Name',
-              render: (_, r) => (
-                <span style={{ paddingLeft: (r.level || 0) * 20 }} className="font-medium">
-                  {r.level > 0 ? '↳ ' : ''}{r.name || r.slug}
-                </span>
-              ),
-            },
-            { title: 'Slug', dataIndex: 'slug', render: (v) => <code className="text-xs bg-gray-100 px-1 rounded">{v}</code> },
-            { title: 'Status', dataIndex: 'is_active', render: (v) => <Tag color={v ? 'green' : 'red'}>{v ? 'Active' : 'Off'}</Tag> },
-            { title: 'Order', dataIndex: 'sort_order' },
-            {
-              title: 'Actions',
-              render: (_, r) => (
-                <Space>
-                  <Button size="small" icon={<EditOutlined />} onClick={() => openForm(r)} />
-                  <Popconfirm title="Delete category?" onConfirm={() => deleteMut.mutate(r.id)}>
-                    <Button size="small" danger icon={<DeleteOutlined />} />
-                  </Popconfirm>
-                </Space>
-              ),
-            },
-          ]}
+          childrenColumnName="children"
+          expandable={{
+            defaultExpandAllRows: true,
+          }}
+          locale={{
+            emptyText: t("categories.noCategories"),
+          }}
         />
       )}
-      <Modal title={editing ? 'Edit Category' : 'Create Category'} open={open} onCancel={() => setOpen(false)} onOk={() => form.submit()} confirmLoading={createMut.isPending || updateMut.isPending} destroyOnClose>
-        <Form form={form} layout="vertical" onFinish={onFinish} className="mt-4">
-          <Form.Item name="slug" label="Slug" rules={[{ required: true }]}><Input /></Form.Item>
-          <Form.Item name="name_en" label="Name (EN)" rules={[{ required: true }]}><Input /></Form.Item>
-          <div className="grid grid-cols-2 gap-3">
-            <Form.Item name="name_tm" label="Name (TM)"><Input /></Form.Item>
-            <Form.Item name="name_ru" label="Name (RU)"><Input /></Form.Item>
-          </div>
-          <Form.Item name="parent_id" label="Parent Category">
-            <Select allowClear options={parentOptions} placeholder="None (top level)" />
+
+      <Modal
+        title={
+          editing
+            ? t("categories.editCategory")
+            : t("categories.createCategory")
+        }
+        open={open}
+        onCancel={() => setOpen(false)}
+        onOk={() => form.submit()}
+        okText={editing ? t("categories.update") : t("categories.create")}
+        cancelText={t("categories.cancel")}
+        confirmLoading={createMut.isPending || updateMut.isPending}
+        destroyOnClose
+      >
+        <Form
+          form={form}
+          layout="vertical"
+          onFinish={onFinish}
+          className="mt-4"
+        >
+          <Form.Item
+            name="name_en"
+            label={t("categories.nameEn")}
+            rules={[
+              {
+                required: true,
+                whitespace: true,
+                message: t("categories.nameRequired"),
+              },
+            ]}
+          >
+            <Input placeholder={t("categories.enterName")} />
           </Form.Item>
-          <Form.Item name="sort_order" label="Sort Order"><InputNumber className="w-full" min={0} /></Form.Item>
-          <Form.Item name="image_file_id" hidden><Input /></Form.Item>
-          <Form.Item label="Image">
+
+          <div className="grid grid-cols-2 gap-3">
+            <Form.Item name="name_tm" label={t("categories.nameTm")}>
+              <Input placeholder={t("categories.enterName")} />
+            </Form.Item>
+
+            <Form.Item name="name_ru" label={t("categories.nameRu")}>
+              <Input placeholder={t("categories.enterName")} />
+            </Form.Item>
+          </div>
+
+          <Form.Item name="parent_id" label={t("categories.parentCategory")}>
+            <Select
+              allowClear
+              showSearch
+              optionFilterProp="label"
+              options={parentOptions}
+              placeholder={t("categories.noParent")}
+            />
+          </Form.Item>
+
+          <Form.Item name="sort_order" label={t("categories.sortOrder")}>
+            <InputNumber className="w-full" min={0} />
+          </Form.Item>
+
+          <Form.Item name="image_file_id" hidden>
+            <Input />
+          </Form.Item>
+
+          <Form.Item label={t("categories.image")}>
             <div className="flex items-center gap-3">
-              {previewUrl && <Image src={previewUrl} width={64} height={64} className="rounded object-cover" />}
-              <Upload accept="image/*" showUploadList={false} beforeUpload={handleUpload} disabled={uploading}>
-                <Button icon={uploading ? <LoadingOutlined /> : <UploadOutlined />} loading={uploading}>Upload</Button>
+              {previewUrl && (
+                <Image
+                  src={previewUrl}
+                  width={64}
+                  height={64}
+                  className="rounded object-cover"
+                />
+              )}
+
+              <Upload
+                accept="image/*"
+                showUploadList={false}
+                beforeUpload={handleUpload}
+                disabled={uploading}
+              >
+                <Button
+                  icon={uploading ? <LoadingOutlined /> : <UploadOutlined />}
+                  loading={uploading}
+                >
+                  {t("categories.upload")}
+                </Button>
               </Upload>
             </div>
           </Form.Item>
-          <Form.Item name="is_active" label="Active" valuePropName="checked"><Switch /></Form.Item>
+
+          <Form.Item
+            name="is_active"
+            label={t("categories.active")}
+            valuePropName="checked"
+          >
+            <Switch />
+          </Form.Item>
         </Form>
       </Modal>
     </div>
   );
+}
+
+// Find the nesting depth of a category in the tree.
+function getCategoryDepth(category, categories, depth = 0) {
+  for (const item of categories || []) {
+    if (item.id === category.id) return depth;
+
+    const found = getCategoryDepth(category, item.children || [], depth + 1);
+
+    if (found !== -1) return found;
+  }
+
+  return -1;
 }

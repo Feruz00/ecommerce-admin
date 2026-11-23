@@ -1,95 +1,523 @@
-import { useState } from 'react';
-import { Table, Button, Tag, Modal, Form, Input, Select, Space, Typography, Spin, Popconfirm } from 'antd';
-import { PlusOutlined, EditOutlined, DeleteOutlined } from '@ant-design/icons';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import api from '../../api/axios';
-import { message } from 'antd';
+import { useState } from "react";
+import {
+  Table,
+  Button,
+  Tag,
+  Modal,
+  Form,
+  Input,
+  Select,
+  Space,
+  Typography,
+  Spin,
+  Popconfirm,
+  message,
+} from "antd";
+import {
+  PlusOutlined,
+  EditOutlined,
+  DeleteOutlined,
+  SearchOutlined,
+} from "@ant-design/icons";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useTranslation } from "react-i18next";
+import api from "../../api/axios";
 
 const { Title } = Typography;
 
 export default function UsersPage() {
+  const { t } = useTranslation();
+
   const [page, setPage] = useState(1);
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState(null);
   const [selected, setSelected] = useState([]);
+  const [search, setSearch] = useState("");
+  const [roleFilter, setRoleFilter] = useState(undefined);
+  const [statusFilter, setStatusFilter] = useState(undefined);
+
   const [form] = Form.useForm();
   const qc = useQueryClient();
 
-  const { data, isLoading } = useQuery({
-    queryKey: ['users', page],
-    queryFn: () => api.get('/users', { params: { page, limit: 15 } }).then((r) => r.data),
+  const { data, isLoading, isError } = useQuery({
+    queryKey: ["users", page, search, roleFilter, statusFilter],
+    queryFn: () =>
+      api
+        .get("/users", {
+          params: {
+            page,
+            limit: 15,
+            search: search || undefined,
+            role: roleFilter,
+            status: statusFilter,
+          },
+        })
+        .then((res) => res.data),
   });
 
+  const invalidateUsers = () => qc.invalidateQueries({ queryKey: ["users"] });
+
   const createMut = useMutation({
-    mutationFn: (v) => api.post('/users', v),
-    onSuccess: () => { qc.invalidateQueries(['users']); message.success('Created'); setOpen(false); },
-    onError: (e) => message.error(e.response?.data?.message || 'Failed'),
+    mutationFn: (values) => api.post("/users", values),
+    onSuccess: () => {
+      invalidateUsers();
+      message.success(t("users.created"));
+      setOpen(false);
+      form.resetFields();
+    },
+    onError: (error) => {
+      message.error(error.response?.data?.message || t("users.createFailed"));
+    },
   });
+
   const updateMut = useMutation({
-    mutationFn: ({ id, ...v }) => api.patch(`/users/${id}`, v),
-    onSuccess: () => { qc.invalidateQueries(['users']); message.success('Updated'); setOpen(false); },
+    mutationFn: ({ id, ...values }) => api.patch(`/users/${id}`, values),
+    onSuccess: () => {
+      invalidateUsers();
+      message.success(t("users.updated"));
+      setOpen(false);
+      setEditing(null);
+      form.resetFields();
+    },
+    onError: (error) => {
+      message.error(error.response?.data?.message || t("users.updateFailed"));
+    },
   });
+
   const deleteMut = useMutation({
     mutationFn: (id) => api.delete(`/users/${id}`),
-    onSuccess: () => { qc.invalidateQueries(['users']); message.success('Deactivated'); },
+    onSuccess: () => {
+      invalidateUsers();
+      message.success(t("users.deactivated"));
+    },
+    onError: (error) => {
+      message.error(
+        error.response?.data?.message || t("users.deactivateFailed"),
+      );
+    },
   });
+
   const bulkMut = useMutation({
-    mutationFn: (ids) => api.post('/users/bulk-delete', { ids }),
-    onSuccess: () => { qc.invalidateQueries(['users']); setSelected([]); message.success('Deactivated'); },
+    mutationFn: (ids) => api.post("/users/bulk-delete", { ids }),
+    onSuccess: () => {
+      invalidateUsers();
+      setSelected([]);
+      message.success(t("users.bulkDeactivated"));
+    },
+    onError: (error) => {
+      message.error(
+        error.response?.data?.message || t("users.bulkDeactivateFailed"),
+      );
+    },
   });
 
   const users = data?.data?.users || [];
+  const total = data?.total || 0;
+
+  function openCreateForm() {
+    setEditing(null);
+    form.resetFields();
+
+    form.setFieldsValue({
+      role: "customer",
+      status: "active",
+      preferred_lang: "en",
+    });
+
+    setOpen(true);
+  }
+
+  function openEditForm(record) {
+    setEditing(record);
+    form.resetFields();
+
+    form.setFieldsValue({
+      first_name: record.first_name,
+      last_name: record.last_name,
+      username: record.username,
+      phone: record.phone,
+      role: record.role,
+      status: record.status,
+      preferred_lang: record.preferred_lang || "en",
+    });
+
+    setOpen(true);
+  }
+
+  function onFinish(values) {
+    const payload = { ...values };
+
+    // Do not send an empty password when editing.
+    if (editing && !payload.password) {
+      delete payload.password;
+    }
+
+    if (editing) {
+      updateMut.mutate({
+        id: editing.id,
+        ...payload,
+      });
+    } else {
+      createMut.mutate(payload);
+    }
+  }
+
+  const roleOptions = [
+    { value: "admin", label: t("users.roles.admin") },
+    { value: "manager", label: t("users.roles.manager") },
+    { value: "customer", label: t("users.roles.customer") },
+  ];
+
+  const statusOptions = [
+    { value: "active", label: t("users.statuses.active") },
+    { value: "inactive", label: t("users.statuses.inactive") },
+    { value: "banned", label: t("users.statuses.banned") },
+  ];
+
+  const languageOptions = [
+    { value: "en", label: t("users.languages.en") },
+    { value: "tm", label: t("users.languages.tm") },
+    { value: "ru", label: t("users.languages.ru") },
+  ];
+
+  const columns = [
+    {
+      title: t("users.name"),
+      key: "name",
+      render: (_, record) => (
+        <div>
+          <div className="font-medium">
+            {record.first_name} {record.last_name}
+          </div>
+          <div className="text-xs text-gray-400">@{record.username}</div>
+        </div>
+      ),
+    },
+    {
+      title: t("users.phone"),
+      dataIndex: "phone",
+      key: "phone",
+      render: (value) => value || "—",
+    },
+    {
+      title: t("users.role"),
+      dataIndex: "role",
+      key: "role",
+      render: (value) => {
+        const colors = {
+          admin: "red",
+          manager: "blue",
+          customer: "default",
+        };
+
+        return (
+          <Tag color={colors[value] || "default"}>
+            {t(`users.roles.${value}`, { defaultValue: value })}
+          </Tag>
+        );
+      },
+    },
+    {
+      title: t("users.status"),
+      dataIndex: "status",
+      key: "status",
+      render: (value) => {
+        const colors = {
+          active: "green",
+          inactive: "orange",
+          banned: "red",
+        };
+
+        return (
+          <Tag color={colors[value] || "default"}>
+            {t(`users.statuses.${value}`, { defaultValue: value })}
+          </Tag>
+        );
+      },
+    },
+    {
+      title: t("users.preferredLanguage"),
+      dataIndex: "preferred_lang",
+      key: "preferred_lang",
+      render: (value) =>
+        t(`users.languages.${value}`, { defaultValue: value || "—" }),
+    },
+    {
+      title: t("users.actions"),
+      key: "actions",
+      render: (_, record) => (
+        <Space>
+          <Button
+            size="small"
+            icon={<EditOutlined />}
+            onClick={() => openEditForm(record)}
+          />
+
+          <Popconfirm
+            title={t("users.deactivateConfirm")}
+            description={t("users.deactivateDescription")}
+            okText={t("users.deactivate")}
+            cancelText={t("users.cancel")}
+            okButtonProps={{ danger: true }}
+            onConfirm={() => deleteMut.mutate(record.id)}
+          >
+            <Button
+              size="small"
+              danger
+              icon={<DeleteOutlined />}
+              loading={deleteMut.isPending && deleteMut.variables === record.id}
+            />
+          </Popconfirm>
+        </Space>
+      ),
+    },
+  ];
 
   return (
     <div>
-      <div className="flex justify-between items-center mb-6">
-        <Title level={3} className="!mb-0">Users</Title>
-        <Space>
+      <div className="flex justify-between items-center mb-6 gap-3 flex-wrap">
+        <Title level={3} className="!mb-0">
+          {t("users.title")}
+        </Title>
+
+        <Space wrap>
           {selected.length > 0 && (
-            <Popconfirm title={`Deactivate ${selected.length} users?`} onConfirm={() => bulkMut.mutate(selected)}>
-              <Button danger>Delete Selected ({selected.length})</Button>
+            <Popconfirm
+              title={t("users.bulkDeactivateConfirm", {
+                count: selected.length,
+              })}
+              onConfirm={() => bulkMut.mutate(selected)}
+              okText={t("users.deactivate")}
+              cancelText={t("users.cancel")}
+              okButtonProps={{ danger: true }}
+            >
+              <Button danger loading={bulkMut.isPending}>
+                {t("users.deactivateSelected")} ({selected.length})
+              </Button>
             </Popconfirm>
           )}
-          <Button type="primary" icon={<PlusOutlined />} onClick={() => { setEditing(null); form.resetFields(); form.setFieldsValue({ role: 'customer', status: 'active' }); setOpen(true); }}>
-            Add User
+
+          <Button
+            type="primary"
+            icon={<PlusOutlined />}
+            onClick={openCreateForm}
+          >
+            {t("users.addUser")}
           </Button>
         </Space>
       </div>
-      {isLoading ? <Spin size="large" className="flex justify-center py-20" /> : (
+
+      <div className="flex gap-3 mb-4 flex-wrap">
+        <Input
+          allowClear
+          prefix={<SearchOutlined />}
+          placeholder={t("users.searchPlaceholder")}
+          value={search}
+          onChange={(event) => {
+            setSearch(event.target.value);
+            setPage(1);
+          }}
+          className="w-full sm:max-w-xs"
+        />
+
+        <Select
+          allowClear
+          placeholder={t("users.filterRole")}
+          options={roleOptions}
+          value={roleFilter}
+          onChange={(value) => {
+            setRoleFilter(value);
+            setPage(1);
+          }}
+          className="w-full sm:w-44"
+        />
+
+        <Select
+          allowClear
+          placeholder={t("users.filterStatus")}
+          options={statusOptions}
+          value={statusFilter}
+          onChange={(value) => {
+            setStatusFilter(value);
+            setPage(1);
+          }}
+          className="w-full sm:w-44"
+        />
+      </div>
+
+      {isLoading ? (
+        <Spin size="large" className="flex justify-center py-20" />
+      ) : isError ? (
+        <div className="text-center py-12 text-red-500">
+          {t("users.loadFailed")}
+        </div>
+      ) : (
         <Table
-          rowSelection={{ selectedRowKeys: selected, onChange: setSelected }}
-          dataSource={users} rowKey="id"
-          pagination={{ current: page, total: data?.total, pageSize: 15, onChange: setPage }}
-          columns={[
-            { title: 'Name', render: (_, r) => <div><div className="font-medium">{r.first_name} {r.last_name}</div><div className="text-xs text-gray-400">{r.email}</div></div> },
-            { title: 'Phone', dataIndex: 'phone', render: (v) => v || '—' },
-            { title: 'Role', dataIndex: 'role', render: (v) => <Tag color={v === 'admin' ? 'red' : v === 'manager' ? 'blue' : 'default'}>{v}</Tag> },
-            { title: 'Status', dataIndex: 'status', render: (v) => <Tag color={v === 'active' ? 'green' : v === 'banned' ? 'red' : 'orange'}>{v}</Tag> },
-            { title: 'Actions', render: (_, r) => (
-              <Space>
-                <Button size="small" icon={<EditOutlined />} onClick={() => { setEditing(r); form.setFieldsValue(r); setOpen(true); }} />
-                <Popconfirm title="Deactivate user?" onConfirm={() => deleteMut.mutate(r.id)}>
-                  <Button size="small" danger icon={<DeleteOutlined />} />
-                </Popconfirm>
-              </Space>
-            )},
-          ]}
+          rowSelection={{
+            selectedRowKeys: selected,
+            onChange: setSelected,
+            preserveSelectedRowKeys: true,
+          }}
+          dataSource={users}
+          rowKey="id"
+          columns={columns}
+          scroll={{ x: 800 }}
+          pagination={{
+            current: page,
+            total,
+            pageSize: 15,
+            showSizeChanger: false,
+            onChange: (nextPage) => setPage(nextPage),
+            showTotal: (count, range) =>
+              t("users.pagination", {
+                from: range[0],
+                to: range[1],
+                total: count,
+              }),
+          }}
+          locale={{
+            emptyText: t("users.noUsers"),
+          }}
         />
       )}
-      <Modal title={editing ? 'Edit User' : 'Create User'} open={open} onCancel={() => setOpen(false)} onOk={() => form.submit()} confirmLoading={createMut.isPending || updateMut.isPending} destroyOnClose>
-        <Form form={form} layout="vertical" onFinish={(v) => editing ? updateMut.mutate({ id: editing.id, ...v }) : createMut.mutate(v)} className="mt-4">
+
+      <Modal
+        title={editing ? t("users.editUser") : t("users.createUser")}
+        open={open}
+        onCancel={() => {
+          setOpen(false);
+          setEditing(null);
+          form.resetFields();
+        }}
+        onOk={() => form.submit()}
+        okText={editing ? t("users.update") : t("users.create")}
+        cancelText={t("users.cancel")}
+        confirmLoading={createMut.isPending || updateMut.isPending}
+        destroyOnClose
+      >
+        <Form
+          form={form}
+          layout="vertical"
+          onFinish={onFinish}
+          className="mt-4"
+        >
           <div className="grid grid-cols-2 gap-3">
-            <Form.Item name="first_name" label="First Name" rules={[{ required: true }]}><Input /></Form.Item>
-            <Form.Item name="last_name" label="Last Name" rules={[{ required: true }]}><Input /></Form.Item>
+            <Form.Item
+              name="first_name"
+              label={t("users.firstName")}
+              rules={[
+                {
+                  required: true,
+                  whitespace: true,
+                  message: t("users.firstNameRequired"),
+                },
+              ]}
+            >
+              <Input />
+            </Form.Item>
+
+            <Form.Item
+              name="last_name"
+              label={t("users.lastName")}
+              rules={[
+                {
+                  required: true,
+                  whitespace: true,
+                  message: t("users.lastNameRequired"),
+                },
+              ]}
+            >
+              <Input />
+            </Form.Item>
           </div>
-          <Form.Item name="email" label="Email" rules={[{ required: true, type: 'email' }]}><Input /></Form.Item>
-          <Form.Item name="phone" label="Phone"><Input /></Form.Item>
-          {!editing && <Form.Item name="password" label="Password" rules={[{ required: true, min: 6 }]}><Input.Password /></Form.Item>}
-          <Form.Item name="role" label="Role" rules={[{ required: true }]}>
-            <Select options={[{ value: 'admin' }, { value: 'manager' }, { value: 'customer' }]} />
+
+          <Form.Item
+            name="username"
+            label={t("users.username")}
+            rules={[
+              {
+                required: true,
+                whitespace: true,
+                message: t("users.usernameRequired"),
+              },
+            ]}
+          >
+            <Input />
           </Form.Item>
-          <Form.Item name="status" label="Status" rules={[{ required: true }]}>
-            <Select options={[{ value: 'active' }, { value: 'inactive' }, { value: 'banned' }]} />
+
+          <Form.Item name="phone" label={t("users.phone")}>
+            <Input />
+          </Form.Item>
+
+          <Form.Item
+            name="password"
+            label={editing ? t("users.newPassword") : t("users.password")}
+            rules={
+              editing
+                ? [
+                    {
+                      min: 6,
+                      message: t("users.passwordMin"),
+                    },
+                  ]
+                : [
+                    {
+                      required: true,
+                      message: t("users.passwordRequired"),
+                    },
+                    {
+                      min: 6,
+                      message: t("users.passwordMin"),
+                    },
+                  ]
+            }
+          >
+            <Input.Password
+              placeholder={
+                editing
+                  ? t("users.passwordEditPlaceholder")
+                  : t("users.passwordPlaceholder")
+              }
+            />
+          </Form.Item>
+
+          <Form.Item
+            name="role"
+            label={t("users.role")}
+            rules={[
+              {
+                required: true,
+                message: t("users.roleRequired"),
+              },
+            ]}
+          >
+            <Select options={roleOptions} />
+          </Form.Item>
+
+          <Form.Item
+            name="status"
+            label={t("users.status")}
+            rules={[
+              {
+                required: true,
+                message: t("users.statusRequired"),
+              },
+            ]}
+          >
+            <Select options={statusOptions} />
+          </Form.Item>
+
+          <Form.Item
+            name="preferred_lang"
+            label={t("users.preferredLanguage")}
+            rules={[
+              {
+                required: true,
+                message: t("users.languageRequired"),
+              },
+            ]}
+          >
+            <Select options={languageOptions} />
           </Form.Item>
         </Form>
       </Modal>

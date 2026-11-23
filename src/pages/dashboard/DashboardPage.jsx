@@ -23,6 +23,7 @@ import {
 } from "@ant-design/icons";
 
 import { useQuery } from "@tanstack/react-query";
+import { useTranslation } from "react-i18next";
 import dayjs from "dayjs";
 import api from "../../api/axios";
 
@@ -51,9 +52,11 @@ const formatNumber = (value) =>
 
 const formatMoney = (value) => `${formatNumber(value)} TMT`;
 
-const formatCustomer = (value) => value || "Guest customer";
+const formatCustomer = (value, fallback) => value || fallback;
 
 export default function DashboardPage() {
+  const { t } = useTranslation();
+
   const { data, isLoading, isError, error, refetch, isFetching } = useQuery({
     queryKey: ["admin-dashboard"],
     queryFn: async () => {
@@ -78,11 +81,11 @@ export default function DashboardPage() {
         <Alert
           type="error"
           showIcon
-          message="Failed to load dashboard"
+          message={t("dashboard.loadFailed")}
           description={
             error?.response?.data?.message ||
             error?.message ||
-            "Something went wrong."
+            t("messages.error")
           }
           action={
             <Button
@@ -91,7 +94,7 @@ export default function DashboardPage() {
               onClick={() => refetch()}
               loading={isFetching}
             >
-              Retry
+              {t("dashboard.retry")}
             </Button>
           }
         />
@@ -105,7 +108,7 @@ export default function DashboardPage() {
 
   const orderColumns = [
     {
-      title: "Order",
+      title: t("dashboard.order"),
       dataIndex: "order_number",
       key: "order_number",
       render: (value) => (
@@ -115,40 +118,52 @@ export default function DashboardPage() {
       ),
     },
     {
-      title: "Customer",
+      title: t("dashboard.customer"),
       dataIndex: "customer_name",
       key: "customer",
-      render: (value) => <Text strong>{formatCustomer(value)}</Text>,
+      render: (value) => (
+        <Text strong>
+          {formatCustomer(value, t("dashboard.guestCustomer"))}
+        </Text>
+      ),
     },
     {
-      title: "Total",
+      title: t("dashboard.total"),
       dataIndex: "total",
       key: "total",
       align: "right",
       render: (value) => <Text strong>{formatMoney(value)}</Text>,
     },
     {
-      title: "Status",
+      title: t("dashboard.status"),
       dataIndex: "status",
       key: "status",
       render: (status) => (
         <Tag color={statusColors[status] || "default"}>
-          {status || "Unknown"}
+          {status
+            ? t(`orderStatus.${status}`, {
+                defaultValue: status,
+              })
+            : t("dashboard.unknown")}
         </Tag>
       ),
     },
     {
-      title: "Payment",
+      title: t("dashboard.payment"),
       dataIndex: "payment_status",
       key: "payment_status",
       render: (status) => (
         <Tag color={paymentColors[status] || "default"}>
-          {status || "Unknown"}
+          {status
+            ? t(`paymentStatus.${status}`, {
+                defaultValue: status,
+              })
+            : t("dashboard.unknown")}
         </Tag>
       ),
     },
     {
-      title: "Date",
+      title: t("dashboard.date"),
       dataIndex: "created_at",
       key: "created_at",
       render: (date) => (
@@ -161,19 +176,21 @@ export default function DashboardPage() {
 
   const stockColumns = [
     {
-      title: "SKU",
+      title: t("dashboard.sku"),
       dataIndex: "sku",
       key: "sku",
       render: (value) => <Text code>{value || "—"}</Text>,
     },
     {
-      title: "Product",
+      title: t("dashboard.product"),
       dataIndex: "name",
       key: "name",
-      render: (value) => <Text strong>{value || "Unnamed product"}</Text>,
+      render: (value) => (
+        <Text strong>{value || t("dashboard.unnamedProduct")}</Text>
+      ),
     },
     {
-      title: "Stock",
+      title: t("dashboard.stock"),
       dataIndex: "quantity",
       key: "quantity",
       align: "right",
@@ -191,9 +208,9 @@ export default function DashboardPage() {
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <Title level={3} className="!mb-1">
-            Dashboard
+            {t("dashboard.title")}
           </Title>
-          <Text type="secondary">Overview of your store performance</Text>
+          <Text type="secondary">{t("dashboard.subtitle")}</Text>
         </div>
 
         <Button
@@ -201,7 +218,7 @@ export default function DashboardPage() {
           onClick={() => refetch()}
           loading={isFetching}
         >
-          Refresh
+          {t("common.refresh")}
         </Button>
       </div>
 
@@ -210,7 +227,7 @@ export default function DashboardPage() {
         <Col xs={24} sm={12} xl={6}>
           <Card className="h-full">
             <Statistic
-              title="Customers"
+              title={t("dashboard.customers")}
               value={stats.customers || 0}
               prefix={<UserOutlined />}
               formatter={formatNumber}
@@ -221,7 +238,7 @@ export default function DashboardPage() {
         <Col xs={24} sm={12} xl={6}>
           <Card className="h-full">
             <Statistic
-              title="Active products"
+              title={t("dashboard.activeProducts")}
               value={stats.products || 0}
               prefix={<ShoppingOutlined />}
               formatter={formatNumber}
@@ -232,7 +249,7 @@ export default function DashboardPage() {
         <Col xs={24} sm={12} xl={6}>
           <Card className="h-full">
             <Statistic
-              title="Total orders"
+              title={t("dashboard.totalOrders")}
               value={stats.orders || 0}
               prefix={<ShoppingCartOutlined />}
               formatter={formatNumber}
@@ -243,7 +260,7 @@ export default function DashboardPage() {
         <Col xs={24} sm={12} xl={6}>
           <Card className="h-full">
             <Statistic
-              title="Paid revenue"
+              title={t("dashboard.paidRevenue")}
               value={stats.revenue || 0}
               prefix={<DollarOutlined />}
               suffix="TMT"
@@ -258,9 +275,13 @@ export default function DashboardPage() {
       <Row gutter={[16, 16]}>
         <Col xs={24} xl={15}>
           <Card
-            title="Recent orders"
+            title={t("dashboard.recentOrders")}
             extra={
-              <Text type="secondary">Latest {recentOrders.length} orders</Text>
+              <Text type="secondary">
+                {t("dashboard.latestOrders", {
+                  count: recentOrders.length,
+                })}
+              </Text>
             }
           >
             <Table
@@ -274,7 +295,7 @@ export default function DashboardPage() {
                 emptyText: (
                   <Empty
                     image={Empty.PRESENTED_IMAGE_SIMPLE}
-                    description="No orders yet"
+                    description={t("dashboard.noOrders")}
                   />
                 ),
               }}
@@ -287,7 +308,7 @@ export default function DashboardPage() {
             title={
               <div className="flex items-center gap-2">
                 <WarningOutlined className="text-orange-500" />
-                <span>Low stock products</span>
+                <span>{t("dashboard.lowStock")}</span>
               </div>
             }
             extra={
@@ -307,7 +328,7 @@ export default function DashboardPage() {
                 emptyText: (
                   <Empty
                     image={Empty.PRESENTED_IMAGE_SIMPLE}
-                    description="All products have sufficient stock"
+                    description={t("dashboard.allStockSufficient")}
                   />
                 ),
               }}

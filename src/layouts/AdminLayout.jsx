@@ -24,7 +24,8 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import api from "../api/axios";
 import { connectAdminSocket, disconnectAdminSocket } from "../utils/socket";
 import useAuthStore from "../store/authStore";
-
+// import { BellOutlined } from "antd";
+import NotificationBell from "../components/NotificationBell";
 const { Header, Sider, Content } = Layout;
 
 export default function AdminLayout() {
@@ -43,15 +44,6 @@ export default function AdminLayout() {
 
   const user = meData?.data?.user;
 
-  const { data: notifData } = useQuery({
-    queryKey: ["admin-notifications"],
-    queryFn: () => api.get("/admin/notifications").then((r) => r.data),
-    refetchInterval: 30000,
-    enabled: !!user,
-  });
-
-  const notificationCount = notifData?.data?.unreadCount || 0;
-
   useEffect(() => {
     if (user) {
       setUser(user);
@@ -63,9 +55,21 @@ export default function AdminLayout() {
     if (!user?.id) return;
 
     connectAdminSocket({
-      onNewOrder: () => {
-        queryClient.invalidateQueries({ queryKey: ["orders"] });
-        queryClient.invalidateQueries({ queryKey: ["dashboard"] });
+      onNewOrder: (payload) => {
+        console.log("New order received:", payload);
+
+        queryClient.invalidateQueries({
+          queryKey: ["orders"],
+        });
+
+        queryClient.invalidateQueries({
+          queryKey: ["dashboard"],
+        });
+      },
+
+      onNewNotification: (payload) => {
+        console.log("New notification received:", payload);
+
         queryClient.invalidateQueries({
           queryKey: ["admin-notifications"],
         });
@@ -184,13 +188,7 @@ export default function AdminLayout() {
               style={{ width: 72 }}
             />
 
-            <Badge count={notificationCount} size="small">
-              <Button
-                type="text"
-                icon={<BellOutlined style={{ fontSize: 18 }} />}
-                onClick={() => navigate("/orders")}
-              />
-            </Badge>
+            <NotificationBell />
 
             <Dropdown
               menu={{

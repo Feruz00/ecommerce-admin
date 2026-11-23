@@ -1,8 +1,10 @@
 import { io } from "socket.io-client";
+
 import {
   requestNotificationPermission,
   showChromeNotification,
 } from "./notify";
+
 import useAuthStore from "../store/authStore";
 
 let socket = null;
@@ -10,7 +12,7 @@ let notificationPermissionRequested = false;
 
 export { requestNotificationPermission, showChromeNotification };
 
-export function connectAdminSocket({ onNewOrder } = {}) {
+export function connectAdminSocket({ onNewOrder, onNewNotification } = {}) {
   const user = useAuthStore.getState().user;
 
   if (!user?.id) {
@@ -18,16 +20,14 @@ export function connectAdminSocket({ onNewOrder } = {}) {
     return null;
   }
 
-  // Reuse existing connection for the same user.
+  // Reuse an existing connection for the same user.
   if (socket) {
-    if (socket.connected && socket.auth?.userId === user.id) {
+    if (Number(socket.auth?.userId) === user.id && !socket.disconnected) {
       return socket;
     }
 
-    if (socket.auth?.userId !== user.id) {
-      socket.disconnect();
-      socket = null;
-    }
+    socket.disconnect();
+    socket = null;
   }
 
   const url = import.meta.env.VITE_SOCKET_URL || window.location.origin;
@@ -36,19 +36,15 @@ export function connectAdminSocket({ onNewOrder } = {}) {
     withCredentials: true,
     autoConnect: true,
     transports: ["websocket", "polling"],
-    auth: {
-      userId: user.id,
-    },
+    auth: {},
     reconnection: true,
     reconnectionAttempts: Infinity,
     reconnectionDelay: 1000,
     reconnectionDelayMax: 5000,
   });
 
-  socket.auth = {
-    ...socket.auth,
-    userId: user.id,
-  };
+  // Used only for local connection reuse.
+  socket.auth.userId = user.id;
 
   socket.on("connect", () => {
     console.log("[admin socket] connected:", socket.id);
@@ -62,21 +58,38 @@ export function connectAdminSocket({ onNewOrder } = {}) {
     console.error("[admin socket] connection error:", error.message);
   });
 
-  socket.on("new_order", async (payload) => {
+  // New order.
+  socket.on("new_order", (payload) => {
     console.log("[admin socket] new order:", payload);
+
+    onNewOrder?.(payload);
+  });
+
+  // New admin notification.
+  socket.on("new_notification", (payload) => {
+    // Each admin only handles their own notification.
+    if (String(payload.userId) !== String(user.id)) {
+      return;
+    }
+
+    console.log("[admin socket] new notification:", payload);
 
     if (!notificationPermissionRequested) {
       notificationPermissionRequested = true;
       requestNotificationPermission();
     }
 
-    if (Notification.permission === "granted") {
-      showChromeNotification("New order", {
-        body: `#${payload.orderNumber} — ${payload.total} TMT`,
+    if (
+      typeof Notification !== "undefined" &&
+      Notification.permission === "granted"
+    ) {
+      showChromeNotification(payload.title, {
+        body: payload.message,
+        tag: payload.id,
       });
     }
 
-    onNewOrder?.(payload);
+    onNewNotification?.(payload);
   });
 
   return socket;

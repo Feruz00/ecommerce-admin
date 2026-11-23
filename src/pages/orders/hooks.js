@@ -1,5 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { message } from "antd";
+import { useTranslation } from "react-i18next";
 
 import { getOrders, getOrder, updateOrderStatus } from "./api";
 
@@ -20,6 +21,7 @@ export const useOrder = (id) => {
 
 export const useUpdateOrderStatus = () => {
   const queryClient = useQueryClient();
+  const { t } = useTranslation();
 
   return useMutation({
     mutationFn: ({ id, ...payload }) => updateOrderStatus(id, payload),
@@ -37,11 +39,11 @@ export const useUpdateOrderStatus = () => {
         queryKey: ["admin-dashboard"],
       });
 
-      message.success("Order updated successfully");
+      message.success(t("messages.orderUpdated"));
     },
 
     onError: (error) => {
-      message.error(error.response?.data?.message || "Failed to update order");
+      message.error(error.response?.data?.message || t("messages.error"));
     },
   });
 };

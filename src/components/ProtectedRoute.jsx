@@ -1,11 +1,17 @@
 import { Navigate, Outlet, useLocation } from "react-router-dom";
 import { Spin } from "antd";
+
 import { useMe } from "../pages/auth/hooks";
+import useAuthStore from "../store/authStore";
+
+const ALLOWED_ROLES = ["admin", "manager"];
 
 export default function ProtectedRoute() {
   const location = useLocation();
 
-  const { data, isLoading, isError } = useMe();
+  const { isLoading, isError } = useMe();
+
+  const user = useAuthStore((state) => state.user);
 
   if (isLoading) {
     return (
@@ -15,9 +21,7 @@ export default function ProtectedRoute() {
     );
   }
 
-  const user = data?.data?.user;
-
-  if (isError || !user || !["admin", "manager"].includes(user.role)) {
+  if (isError || !user || !ALLOWED_ROLES.includes(user.role)) {
     return <Navigate to="/login" replace state={{ from: location }} />;
   }
 

@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { useTranslation } from "react-i18next";
 import {
   Alert,
   Button,
@@ -23,6 +24,7 @@ import {
   message,
 } from "antd";
 import {
+  CopyOutlined,
   DeleteOutlined,
   EditOutlined,
   PlusOutlined,
@@ -72,25 +74,33 @@ async function uploadImage(file, entityType = "product") {
   });
 
   const uploaded = data?.data?.file;
-  if (!uploaded?.id)
+
+  if (!uploaded?.id) {
     throw new Error("Upload response did not contain a file ID");
+  }
+
   return uploaded;
 }
 
 function AttributeField({ attribute, name, ...formItemProps }) {
+  const { t } = useTranslation();
+
   const options = (attribute.options || []).map((option) => ({
     value: option.id,
     label: getOptionLabel(option),
   }));
 
   let control;
+
   if (["select", "color"].includes(attribute.type)) {
     control = (
       <Select
         allowClear
         showSearch
         optionFilterProp="label"
-        placeholder={`Select ${getAttrLabel(attribute).toLowerCase()}`}
+        placeholder={t("products.selectAttribute", {
+          name: getAttrLabel(attribute).toLowerCase(),
+        })}
         options={options}
       />
     );
@@ -101,7 +111,11 @@ function AttributeField({ attribute, name, ...formItemProps }) {
     formItemProps.valuePropName = "checked";
   } else {
     control = (
-      <Input placeholder={`Enter ${getAttrLabel(attribute).toLowerCase()}`} />
+      <Input
+        placeholder={t("products.enterAttribute", {
+          name: getAttrLabel(attribute).toLowerCase(),
+        })}
+      />
     );
   }
 
@@ -113,6 +127,7 @@ function AttributeField({ attribute, name, ...formItemProps }) {
 }
 
 export default function ProductsPage() {
+  const { t } = useTranslation();
   const [form] = Form.useForm();
   const queryClient = useQueryClient();
 
@@ -157,6 +172,7 @@ export default function ProductsPage() {
       allAttributes.filter((item) => ["product", "both"].includes(item.scope)),
     [allAttributes],
   );
+
   const variantAttributes = useMemo(
     () =>
       allAttributes.filter((item) => ["variant", "both"].includes(item.scope)),
@@ -167,18 +183,27 @@ export default function ProductsPage() {
     queryClient.invalidateQueries({ queryKey: ["admin-products"] });
   };
 
+  function closeModal() {
+    setModalOpen(false);
+    setEditingProduct(null);
+    setProductImage(null);
+    setProductImageUrl("");
+    setVariantUploading({});
+    form.resetFields();
+  }
+
   const createMutation = useMutation({
     mutationFn: (payload) => api.post("/products", payload),
     onSuccess: () => {
       refreshProducts();
-      message.success("Product created");
+      message.success(t("products.messages.created"));
       closeModal();
     },
     onError: (error) =>
       message.error(
         error.response?.data?.message ||
           error.message ||
-          "Could not create product",
+          t("products.messages.createFailed"),
       ),
   });
 
@@ -186,14 +211,14 @@ export default function ProductsPage() {
     mutationFn: ({ id, ...payload }) => api.patch(`/products/${id}`, payload),
     onSuccess: () => {
       refreshProducts();
-      message.success("Product updated");
+      message.success(t("products.messages.updated"));
       closeModal();
     },
     onError: (error) =>
       message.error(
         error.response?.data?.message ||
           error.message ||
-          "Could not update product",
+          t("products.messages.updateFailed"),
       ),
   });
 
@@ -201,11 +226,11 @@ export default function ProductsPage() {
     mutationFn: (id) => api.delete(`/products/${id}`),
     onSuccess: () => {
       refreshProducts();
-      message.success("Product deleted");
+      message.success(t("products.messages.deleted"));
     },
     onError: (error) =>
       message.error(
-        error.response?.data?.message || "Could not delete product",
+        error.response?.data?.message || t("products.messages.deleteFailed"),
       ),
   });
 
@@ -214,21 +239,23 @@ export default function ProductsPage() {
     onSuccess: () => {
       refreshProducts();
       setSelectedRowKeys([]);
-      message.success("Selected products deleted");
+      message.success(t("products.messages.selectedDeleted"));
     },
     onError: (error) =>
       message.error(
-        error.response?.data?.message || "Could not delete products",
+        error.response?.data?.message || t("products.messages.deleteFailed"),
       ),
   });
 
-  function closeModal() {
-    setModalOpen(false);
-    setEditingProduct(null);
-    setProductImage(null);
-    setProductImageUrl("");
-    setVariantUploading({});
-    form.resetFields();
+  async function copyProductLink(product) {
+    const productUrl = `${window.location.origin}/product/${product.id}`;
+
+    try {
+      await navigator.clipboard.writeText(productUrl);
+      message.success(t("products.messages.linkCopied"));
+    } catch {
+      message.error(t("products.messages.copyFailed"));
+    }
   }
 
   async function openForm(record = null) {
@@ -249,18 +276,22 @@ export default function ProductsPage() {
     }
 
     setDetailLoading(true);
+
     try {
       const response = await api.get(`/products/${record.id}`, {
         params: { include_inactive: "true" },
       });
+
       const product = response.data?.data?.product;
-      if (!product) throw new Error("Product details were not returned");
+
+      if (!product) {
+        throw new Error(t("products.messages.detailsNotReturned"));
+      }
 
       setProductImageUrl(product.image || "");
 
       const values = {
         sku: product.sku,
-        slug: product.slug,
         price: product.price != null ? Number(product.price) : undefined,
         compare_at_price:
           product.compare_at_price != null
@@ -276,6 +307,7 @@ export default function ProductsPage() {
         image_url: product.image || "",
         variants: (product.variants || []).map((variant) => {
           const attributes = {};
+
           (variant.attributes || []).forEach((item) => {
             attributes[item.attribute_id] =
               item.option_id != null
@@ -308,15 +340,18 @@ export default function ProductsPage() {
         const value = (product.attributes || []).find(
           (item) => String(item.attribute_id) === String(attribute.id),
         );
-        if (value)
+
+        if (value) {
           values[`attr_${attribute.id}`] = getAttributeFormValue(value);
+        }
       });
 
       form.setFieldsValue(values);
       setModalOpen(true);
     } catch (error) {
       message.error(
-        error.response?.data?.message || "Could not load product details",
+        error.response?.data?.message ||
+          t("products.messages.loadDetailsFailed"),
       );
     } finally {
       setDetailLoading(false);
@@ -325,42 +360,52 @@ export default function ProductsPage() {
 
   async function handleProductUpload(file) {
     setProductUploading(true);
+
     try {
       const uploaded = await uploadImage(file, "product");
       setProductImage(uploaded);
       setProductImageUrl(uploaded.url);
       form.setFieldValue("image_url", uploaded.url);
-      message.success("Product image uploaded");
+      message.success(t("products.messages.imageUploaded"));
     } catch (error) {
       message.error(
-        error.response?.data?.message || error.message || "Image upload failed",
+        error.response?.data?.message ||
+          error.message ||
+          t("products.messages.imageUploadFailed"),
       );
     } finally {
       setProductUploading(false);
     }
+
     return false;
   }
 
   async function handleVariantUpload(file, fieldName) {
     setVariantUploading((state) => ({ ...state, [fieldName]: true }));
+
     try {
       const uploaded = await uploadImage(file, "variant");
       const variants = form.getFieldValue("variants") || [];
       const next = [...variants];
+
       next[fieldName] = {
         ...next[fieldName],
         image_file_id: uploaded.id,
         image_url: uploaded.url,
       };
+
       form.setFieldValue("variants", next);
-      message.success("Variant image uploaded");
+      message.success(t("products.messages.imageUploaded"));
     } catch (error) {
       message.error(
-        error.response?.data?.message || error.message || "Image upload failed",
+        error.response?.data?.message ||
+          error.message ||
+          t("products.messages.imageUploadFailed"),
       );
     } finally {
       setVariantUploading((state) => ({ ...state, [fieldName]: false }));
     }
+
     return false;
   }
 
@@ -368,15 +413,23 @@ export default function ProductsPage() {
     return productAttributes
       .map((attribute) => {
         const value = values[`attr_${attribute.id}`];
+
         if (value === undefined || value === null || value === "") return null;
 
         const base = { attribute_id: attribute.id };
-        if (["select", "color"].includes(attribute.type))
+
+        if (["select", "color"].includes(attribute.type)) {
           return { ...base, option_id: value };
-        if (attribute.type === "number")
+        }
+
+        if (attribute.type === "number") {
           return { ...base, value_number: value };
-        if (attribute.type === "boolean")
+        }
+
+        if (attribute.type === "boolean") {
           return { ...base, value_boolean: Boolean(value) };
+        }
+
         return { ...base, value_text: String(value) };
       })
       .filter(Boolean);
@@ -386,17 +439,22 @@ export default function ProductsPage() {
     return variantAttributes
       .map((attribute) => {
         const value = values[attribute.id];
+
         if (value === undefined || value === null || value === "") return null;
 
         const base = { attribute_id: attribute.id };
+
         if (["select", "color"].includes(attribute.type)) {
           return { ...base, option_id: value };
         }
-        // VariantAttributeValue stores free-form values in value_text.
-        // Keep number/boolean values normalized as strings.
+
         if (attribute.type === "boolean") {
-          return { ...base, value_text: value === true ? "true" : "false" };
+          return {
+            ...base,
+            value_text: value === true ? "true" : "false",
+          };
         }
+
         return { ...base, value_text: String(value) };
       })
       .filter(Boolean);
@@ -405,7 +463,6 @@ export default function ProductsPage() {
   function onFinish(values) {
     const payload = {
       sku: values.sku?.trim(),
-      slug: values.slug?.trim(),
       price: values.price,
       compare_at_price: values.compare_at_price ?? null,
       quantity: values.quantity ?? 0,
@@ -456,7 +513,7 @@ export default function ProductsPage() {
 
   const columns = [
     {
-      title: "Product",
+      title: t("products.table.product"),
       key: "product",
       render: (_, product) => (
         <div className="flex min-w-[220px] items-center gap-3">
@@ -473,9 +530,10 @@ export default function ProductsPage() {
               <PictureOutlined />
             </div>
           )}
+
           <div className="min-w-0">
             <div className="truncate font-medium text-slate-800">
-              {product.name || product.slug}
+              {product.name || "—"}
             </div>
             <div className="text-xs text-slate-400">{product.sku}</div>
           </div>
@@ -483,22 +541,22 @@ export default function ProductsPage() {
       ),
     },
     {
-      title: "Category",
+      title: t("products.table.category"),
       dataIndex: ["category", "name"],
       render: (value) => <Text type="secondary">{value || "—"}</Text>,
     },
     {
-      title: "Price",
+      title: t("products.table.price"),
       dataIndex: "price",
       render: money,
     },
     {
-      title: "Stock",
+      title: t("products.table.stock"),
       dataIndex: "quantity",
       render: (value) => <span className="tabular-nums">{value ?? 0}</span>,
     },
     {
-      title: "Variants",
+      title: t("products.table.variants"),
       dataIndex: "variants_count",
       render: (_, product) =>
         product.variants_count != null ? (
@@ -508,30 +566,41 @@ export default function ProductsPage() {
         ),
     },
     {
-      title: "Status",
+      title: t("products.table.status"),
       dataIndex: "is_active",
       render: (active) => (
         <Tag color={active ? "success" : "default"}>
-          {active ? "Active" : "Inactive"}
+          {active ? t("products.status.active") : t("products.status.inactive")}
         </Tag>
       ),
     },
     {
-      title: "",
+      title: t("products.table.actions"),
       key: "actions",
       align: "right",
       render: (_, product) => (
         <Space size={4}>
           <Button
             type="text"
+            icon={<CopyOutlined />}
+            aria-label={t("products.actions.copyLink")}
+            title={t("products.actions.copyLink")}
+            onClick={() => copyProductLink(product)}
+          />
+
+          <Button
+            type="text"
             icon={<EditOutlined />}
-            aria-label="Edit product"
+            aria-label={t("products.actions.edit")}
+            title={t("products.actions.edit")}
             onClick={() => openForm(product)}
           />
+
           <Popconfirm
-            title="Delete this product?"
-            description="This action cannot be undone."
-            okText="Delete"
+            title={t("products.confirm.deleteTitle")}
+            description={t("products.confirm.deleteDescription")}
+            okText={t("common.delete")}
+            cancelText={t("common.cancel")}
             okButtonProps={{ danger: true }}
             onConfirm={() => deleteMutation.mutate(product.id)}
           >
@@ -539,7 +608,8 @@ export default function ProductsPage() {
               type="text"
               danger
               icon={<DeleteOutlined />}
-              aria-label="Delete product"
+              aria-label={t("products.actions.delete")}
+              title={t("products.actions.delete")}
             />
           </Popconfirm>
         </Space>
@@ -554,31 +624,36 @@ export default function ProductsPage() {
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <Title level={3} className="!mb-1 !text-slate-800">
-            Products
+            {t("products.title")}
           </Title>
-          <Text type="secondary">
-            Manage your catalog, product details and variants.
-          </Text>
+          <Text type="secondary">{t("products.subtitle")}</Text>
         </div>
+
         <Space wrap>
           {selectedRowKeys.length > 0 && (
             <Popconfirm
-              title={`Delete ${selectedRowKeys.length} selected products?`}
-              okText="Delete"
+              title={t("products.confirm.bulkDeleteTitle", {
+                count: selectedRowKeys.length,
+              })}
+              okText={t("common.delete")}
+              cancelText={t("common.cancel")}
               okButtonProps={{ danger: true }}
               onConfirm={() => bulkDeleteMutation.mutate(selectedRowKeys)}
             >
               <Button danger loading={bulkDeleteMutation.isPending}>
-                Delete selected ({selectedRowKeys.length})
+                {t("products.actions.deleteSelected", {
+                  count: selectedRowKeys.length,
+                })}
               </Button>
             </Popconfirm>
           )}
+
           <Button
             type="primary"
             icon={<PlusOutlined />}
             onClick={() => openForm()}
           >
-            Add product
+            {t("products.actions.add")}
           </Button>
         </Space>
       </div>
@@ -597,7 +672,7 @@ export default function ProductsPage() {
             pageSize: 10,
             showSizeChanger: true,
             pageSizeOptions: [10, 20, 50, 100],
-            showTotal: (total) => `${total} products`,
+            showTotal: (total) => t("products.pagination.total", { total }),
           }}
           scroll={{ x: 850 }}
         />
@@ -609,10 +684,12 @@ export default function ProductsPage() {
         title={
           <div>
             <div className="text-base font-semibold text-slate-800">
-              {editingProduct ? "Edit product" : "Create product"}
+              {editingProduct
+                ? t("products.modal.editTitle")
+                : t("products.modal.createTitle")}
             </div>
             <div className="text-xs font-normal text-slate-400">
-              Product information, attributes and variants
+              {t("products.modal.subtitle")}
             </div>
           </div>
         }
@@ -621,7 +698,7 @@ export default function ProductsPage() {
         destroyOnClose
         footer={[
           <Button key="cancel" onClick={closeModal}>
-            Cancel
+            {t("common.cancel")}
           </Button>,
           <Button
             key="save"
@@ -629,7 +706,9 @@ export default function ProductsPage() {
             loading={saving}
             onClick={() => form.submit()}
           >
-            {editingProduct ? "Save changes" : "Create product"}
+            {editingProduct
+              ? t("products.actions.saveChanges")
+              : t("products.actions.create")}
           </Button>,
         ]}
       >
@@ -658,99 +737,110 @@ export default function ProductsPage() {
                   className="!mb-4 !rounded-xl !bg-slate-50"
                   title={
                     <span className="text-sm font-semibold">
-                      Basic information
+                      {t("products.sections.basicInformation")}
                     </span>
                   }
                 >
-                  <Row gutter={12}>
-                    <Col xs={24} md={12}>
-                      <Form.Item
-                        name="sku"
-                        label="Product SKU"
-                        rules={[
-                          {
-                            required: true,
-                            whitespace: true,
-                            message: "SKU is required",
-                          },
-                        ]}
-                      >
-                        <Input placeholder="e.g. PHONE-001" />
-                      </Form.Item>
-                    </Col>
-                    <Col xs={24} md={12}>
-                      <Form.Item
-                        name="slug"
-                        label="Slug"
-                        rules={[
-                          {
-                            required: true,
-                            whitespace: true,
-                            message: "Slug is required",
-                          },
-                        ]}
-                      >
-                        <Input placeholder="product-name" />
-                      </Form.Item>
-                    </Col>
-                  </Row>
                   <Form.Item
-                    name="name_en"
-                    label="Name (English)"
+                    name="sku"
+                    label={t("products.fields.sku")}
                     rules={[
                       {
                         required: true,
                         whitespace: true,
-                        message: "English name is required",
+                        message: t("products.validation.skuRequired"),
                       },
                     ]}
                   >
-                    <Input placeholder="Product name" />
+                    <Input placeholder="e.g. PHONE-001" />
                   </Form.Item>
+
+                  <Form.Item
+                    name="name_en"
+                    label={t("products.fields.nameEn")}
+                    rules={[
+                      {
+                        required: true,
+                        whitespace: true,
+                        message: t("products.validation.nameEnRequired"),
+                      },
+                    ]}
+                  >
+                    <Input
+                      placeholder={t("products.placeholders.productName")}
+                    />
+                  </Form.Item>
+
                   <Row gutter={12}>
                     <Col xs={24} md={12}>
-                      <Form.Item name="name_tm" label="Name (Turkmen)">
+                      <Form.Item
+                        name="name_tm"
+                        label={t("products.fields.nameTm")}
+                      >
                         <Input placeholder="Harydyň ady" />
                       </Form.Item>
                     </Col>
                     <Col xs={24} md={12}>
-                      <Form.Item name="name_ru" label="Name (Russian)">
+                      <Form.Item
+                        name="name_ru"
+                        label={t("products.fields.nameRu")}
+                      >
                         <Input placeholder="Название товара" />
                       </Form.Item>
                     </Col>
                   </Row>
+
                   <Form.Item
                     name="category_id"
-                    label="Category"
-                    rules={[{ required: true, message: "Choose a category" }]}
+                    label={t("products.fields.category")}
+                    rules={[
+                      {
+                        required: true,
+                        message: t("products.validation.categoryRequired"),
+                      },
+                    ]}
                   >
                     <Select
                       showSearch
                       optionFilterProp="label"
-                      placeholder="Choose category"
+                      placeholder={t("products.placeholders.chooseCategory")}
                       options={categories.map((category) => ({
                         value: category.id,
-                        label: category.name || category.slug,
+                        label: category.name || "—",
                       }))}
                     />
                   </Form.Item>
+
                   <Row gutter={12}>
                     <Col xs={24} md={8}>
                       <Form.Item
                         name="price"
-                        label="Base price (TMT)"
-                        rules={[{ required: true, message: "Enter a price" }]}
+                        label={t("products.fields.basePrice")}
+                        rules={[
+                          {
+                            required: true,
+                            message: t("products.validation.priceRequired"),
+                          },
+                        ]}
                       >
                         <InputNumber min={0} className="w-full" />
                       </Form.Item>
                     </Col>
+
                     <Col xs={24} md={8}>
-                      <Form.Item name="compare_at_price" label="Compare price">
+                      <Form.Item
+                        name="compare_at_price"
+                        label={t("products.fields.comparePrice")}
+                      >
                         <InputNumber min={0} className="w-full" />
                       </Form.Item>
                     </Col>
+
                     <Col xs={24} md={8}>
-                      <Form.Item name="quantity" label="Base stock">
+                      <Form.Item
+                        name="quantity"
+                        label={t("products.fields.baseStock")}
+                      >
                         <InputNumber min={0} className="w-full" />
                       </Form.Item>
                     </Col>
@@ -764,7 +854,7 @@ export default function ProductsPage() {
                     className="!mb-4 !rounded-xl !bg-slate-50"
                     title={
                       <span className="text-sm font-semibold">
-                        Product attributes
+                        {t("products.sections.productAttributes")}
                       </span>
                     }
                   >
@@ -788,7 +878,9 @@ export default function ProductsPage() {
                   bordered={false}
                   className="!rounded-xl !bg-slate-50"
                   title={
-                    <span className="text-sm font-semibold">Product image</span>
+                    <span className="text-sm font-semibold">
+                      {t("products.sections.productImage")}
+                    </span>
                   }
                 >
                   <div className="flex flex-col items-center gap-3">
@@ -804,10 +896,11 @@ export default function ProductsPage() {
                       <div className="flex h-[170px] w-full flex-col items-center justify-center rounded-xl border border-dashed border-slate-300 bg-white text-slate-300">
                         <PictureOutlined className="text-3xl" />
                         <Text type="secondary" className="mt-2 text-xs">
-                          No image selected
+                          {t("products.messages.noImageSelected")}
                         </Text>
                       </div>
                     )}
+
                     <Upload
                       accept="image/jpeg,image/png,image/webp,image/gif"
                       showUploadList={false}
@@ -818,13 +911,14 @@ export default function ProductsPage() {
                         icon={<UploadOutlined />}
                         loading={productUploading}
                       >
-                        Upload image
+                        {t("products.actions.uploadImage")}
                       </Button>
                     </Upload>
+
                     <Form.Item name="image_url" noStyle>
                       <Input
                         size="small"
-                        placeholder="Or paste image URL"
+                        placeholder={t("products.placeholders.imageUrl")}
                         onChange={(event) => {
                           const value = event.target.value;
                           form.setFieldValue("image_url", value);
@@ -833,8 +927,9 @@ export default function ProductsPage() {
                         }}
                       />
                     </Form.Item>
+
                     <Text type="secondary" className="text-center text-xs">
-                      JPEG, PNG, WebP or GIF
+                      {t("products.messages.supportedImageFormats")}
                     </Text>
                   </div>
                 </Card>
@@ -844,20 +939,23 @@ export default function ProductsPage() {
                   bordered={false}
                   className="!rounded-xl !bg-slate-50"
                   title={
-                    <span className="text-sm font-semibold">Visibility</span>
+                    <span className="text-sm font-semibold">
+                      {t("products.sections.visibility")}
+                    </span>
                   }
                 >
                   <Form.Item
                     name="is_active"
-                    label="Product active"
+                    label={t("products.fields.productActive")}
                     valuePropName="checked"
                     className="!mb-3"
                   >
                     <Switch />
                   </Form.Item>
+
                   <Form.Item
                     name="is_featured"
-                    label="Featured product"
+                    label={t("products.fields.featuredProduct")}
                     valuePropName="checked"
                     className="!mb-0"
                   >
@@ -873,9 +971,11 @@ export default function ProductsPage() {
               <div className="flex items-center gap-2">
                 <AppstoreOutlined className="text-slate-500" />
                 <div>
-                  <div className="font-semibold text-slate-800">Variants</div>
+                  <div className="font-semibold text-slate-800">
+                    {t("products.sections.variants")}
+                  </div>
                   <Text type="secondary" className="text-xs">
-                    Add sizes, colors, storage capacities and other options.
+                    {t("products.messages.variantsDescription")}
                   </Text>
                 </div>
               </div>
@@ -887,6 +987,7 @@ export default function ProductsPage() {
                   {fields.map((field, index) => {
                     const variantValues =
                       form.getFieldValue(["variants", field.name]) || {};
+
                     return (
                       <Card
                         key={field.key}
@@ -898,10 +999,14 @@ export default function ProductsPage() {
                               {index + 1}
                             </span>
                             <span className="text-sm font-semibold">
-                              Variant {index + 1}
+                              {t("products.sections.variantNumber", {
+                                number: index + 1,
+                              })}
                             </span>
                             {variantValues.id && (
-                              <Tag bordered={false}>Saved</Tag>
+                              <Tag bordered={false}>
+                                {t("products.status.saved")}
+                              </Tag>
                             )}
                           </div>
                         }
@@ -913,49 +1018,55 @@ export default function ProductsPage() {
                             icon={<DeleteOutlined />}
                             onClick={() => remove(field.name)}
                           >
-                            Remove
+                            {t("common.remove")}
                           </Button>
                         }
                       >
                         <Form.Item name={[field.name, "id"]} hidden>
                           <Input />
                         </Form.Item>
+
                         <Row gutter={12}>
                           <Col xs={24} md={12}>
                             <Form.Item
                               name={[field.name, "sku"]}
-                              label="Variant SKU"
+                              label={t("products.fields.variantSku")}
                               rules={[
                                 {
                                   required: true,
                                   whitespace: true,
-                                  message: "Variant SKU is required",
+                                  message: t(
+                                    "products.validation.variantSkuRequired",
+                                  ),
                                 },
                               ]}
                             >
                               <Input placeholder="e.g. PHONE-001-BLACK-128" />
                             </Form.Item>
                           </Col>
+
                           <Col xs={12} md={4}>
                             <Form.Item
                               name={[field.name, "price"]}
-                              label="Price"
+                              label={t("products.fields.price")}
                             >
                               <InputNumber min={0} className="w-full" />
                             </Form.Item>
                           </Col>
+
                           <Col xs={12} md={4}>
                             <Form.Item
                               name={[field.name, "compare_at_price"]}
-                              label="Compare"
+                              label={t("products.fields.compare")}
                             >
                               <InputNumber min={0} className="w-full" />
                             </Form.Item>
                           </Col>
+
                           <Col xs={12} md={4}>
                             <Form.Item
                               name={[field.name, "quantity"]}
-                              label="Stock"
+                              label={t("products.fields.stock")}
                             >
                               <InputNumber min={0} className="w-full" />
                             </Form.Item>
@@ -969,11 +1080,13 @@ export default function ProductsPage() {
                               strong
                               className="mb-3 block text-xs uppercase tracking-wide text-slate-500"
                             >
-                              Variant attributes
+                              {t("products.sections.variantAttributes")}
                             </Text>
+
                             <Row gutter={12}>
                               {variantAttributes.map((attribute) => {
                                 const isBoolean = attribute.type === "boolean";
+
                                 return (
                                   <Col xs={24} md={8} key={attribute.id}>
                                     {isBoolean ? (
@@ -1006,6 +1119,7 @@ export default function ProductsPage() {
                         )}
 
                         <Divider className="!my-2" />
+
                         <Row gutter={12} align="middle">
                           <Col xs={24} md={12}>
                             <Form.Item
@@ -1014,9 +1128,11 @@ export default function ProductsPage() {
                             >
                               <Input />
                             </Form.Item>
+
                             <Form.Item name={[field.name, "image_url"]} noStyle>
                               <Input type="hidden" />
                             </Form.Item>
+
                             <div className="flex items-center gap-3">
                               {variantValues.image_url ? (
                                 <Image
@@ -1031,6 +1147,7 @@ export default function ProductsPage() {
                                   <PictureOutlined />
                                 </div>
                               )}
+
                               <Upload
                                 accept="image/jpeg,image/png,image/webp"
                                 showUploadList={false}
@@ -1043,15 +1160,16 @@ export default function ProductsPage() {
                                   icon={<UploadOutlined />}
                                   loading={variantUploading[field.name]}
                                 >
-                                  Variant image
+                                  {t("products.actions.variantImage")}
                                 </Button>
                               </Upload>
                             </div>
                           </Col>
+
                           <Col xs={24} md={12}>
                             <Form.Item
                               name={[field.name, "is_active"]}
-                              label="Variant active"
+                              label={t("products.fields.variantActive")}
                               valuePropName="checked"
                               className="!mb-0"
                             >
@@ -1077,7 +1195,7 @@ export default function ProductsPage() {
                       })
                     }
                   >
-                    Add variant
+                    {t("products.actions.addVariant")}
                   </Button>
 
                   {fields.length === 0 && (
@@ -1085,8 +1203,8 @@ export default function ProductsPage() {
                       type="info"
                       showIcon
                       icon={<InboxOutlined />}
-                      message="No variants added"
-                      description="This product will use its base price and stock. Add variants only when customers can choose different options."
+                      message={t("products.messages.noVariants")}
+                      description={t("products.messages.noVariantsDescription")}
                     />
                   )}
                 </div>
