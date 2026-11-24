@@ -35,6 +35,7 @@ import {
 } from "@ant-design/icons";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import api from "../../api/axios";
+import { getImageUrl } from "../../utils/functions";
 
 const { Title, Text } = Typography;
 
@@ -519,7 +520,11 @@ export default function ProductsPage() {
         <div className="flex min-w-[220px] items-center gap-3">
           {product.image ? (
             <Image
-              src={product.image}
+              src={
+                product.image.startsWith("/uploads")
+                  ? getImageUrl(product.image)
+                  : product.image
+              }
               width={48}
               height={48}
               preview={false}
@@ -886,7 +891,11 @@ export default function ProductsPage() {
                   <div className="flex flex-col items-center gap-3">
                     {productImageUrl ? (
                       <Image
-                        src={productImageUrl}
+                        src={
+                          productImageUrl.startsWith("/uploads")
+                            ? getImageUrl(productImageUrl)
+                            : productImageUrl
+                        }
                         width="100%"
                         height={170}
                         className="rounded-xl object-cover"

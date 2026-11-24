@@ -27,6 +27,7 @@ import {
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import api from "../../api/axios";
+import { getImageUrl } from "../../utils/functions";
 
 const { Title, Text } = Typography;
 const { TextArea } = Input;
@@ -237,7 +238,7 @@ export default function BannersPage() {
 
         return url ? (
           <Image
-            src={url}
+            src={url.startsWith("/uploads") ? getImageUrl(url) : url}
             width={80}
             height={48}
             className="rounded object-cover"
@@ -432,7 +433,11 @@ export default function BannersPage() {
             <div className="flex flex-wrap items-center gap-3">
               {preview ? (
                 <Image
-                  src={preview}
+                  src={
+                    preview.startsWith("/uploads")
+                      ? getImageUrl(preview)
+                      : preview
+                  }
                   width={120}
                   height={64}
                   className="rounded object-cover"

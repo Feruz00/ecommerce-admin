@@ -27,6 +27,7 @@ import {
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import api from "../../api/axios";
+import { getImageUrl } from "../../utils/functions";
 
 const { Title } = Typography;
 
@@ -253,7 +254,11 @@ export default function CategoriesPage() {
         <div className="flex items-center gap-3">
           {record.image && (
             <Image
-              src={record.image}
+              src={
+                record.image.startsWith("/uploads")
+                  ? getImageUrl(record.image)
+                  : record.image
+              }
               width={36}
               height={36}
               className="rounded object-cover"
@@ -416,7 +421,11 @@ export default function CategoriesPage() {
             <div className="flex items-center gap-3">
               {previewUrl && (
                 <Image
-                  src={previewUrl}
+                  src={
+                    previewUrl.startsWith("/uploads")
+                      ? getImageUrl(previewUrl)
+                      : previewUrl
+                  }
                   width={64}
                   height={64}
                   className="rounded object-cover"
