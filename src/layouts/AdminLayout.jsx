@@ -26,6 +26,8 @@ import { connectAdminSocket, disconnectAdminSocket } from "../utils/socket";
 import useAuthStore from "../store/authStore";
 // import { BellOutlined } from "antd";
 import NotificationBell from "../components/NotificationBell";
+import logo from "../assets/logo.png";
+import logoIcon from "../assets/icon.png";
 const { Header, Sider, Content } = Layout;
 
 export default function AdminLayout() {
@@ -144,8 +146,20 @@ export default function AdminLayout() {
         width={220}
         className="h-screen overflow-hidden"
       >
-        <div className="h-14 flex items-center justify-center text-white font-bold text-lg">
-          {collapsed ? "TS" : "TechStore"}
+        <div className="h-14 my-8 flex items-center justify-center px-3">
+          <Link
+            to="/"
+            aria-label="Online Sowda Dashboard"
+            className="flex items-center justify-center w-full h-full"
+          >
+            <img
+              src={collapsed ? logoIcon : logo}
+              alt="Online Sowda"
+              className={`object-contain transition-all duration-200 ${
+                collapsed ? "w-9 h-9" : "w-full max-w-[165px] h-10"
+              }`}
+            />
+          </Link>
         </div>
 
         <div className="h-[calc(100%-56px)] overflow-y-auto">
