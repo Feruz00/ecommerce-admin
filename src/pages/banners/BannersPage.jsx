@@ -251,21 +251,21 @@ export default function BannersPage() {
         );
       },
     },
-    {
-      title: t("banners.title"),
-      key: "title",
-      render: (_, record) => (
-        <div className="min-w-40">
-          <div className="font-medium">{getBannerTitle(record)}</div>
+    // {
+    //   title: t("banners.title"),
+    //   key: "title",
+    //   render: (_, record) => (
+    //     <div className="min-w-40">
+    //       <div className="font-medium">{getBannerTitle(record)}</div>
 
-          {getBannerText(record) && (
-            <Text type="secondary" className="text-xs">
-              {getBannerText(record)}
-            </Text>
-          )}
-        </div>
-      ),
-    },
+    //       {getBannerText(record) && (
+    //         <Text type="secondary" className="text-xs">
+    //           {getBannerText(record)}
+    //         </Text>
+    //       )}
+    //     </div>
+    //   ),
+    // },
     {
       title: t("banners.link"),
       dataIndex: "link",
@@ -379,7 +379,7 @@ export default function BannersPage() {
           onFinish={onFinish}
           className="mt-4"
         >
-          <Form.Item
+          {/* <Form.Item
             name="title_en"
             label={t("banners.titleEn")}
             rules={[
@@ -405,9 +405,9 @@ export default function BannersPage() {
             <Form.Item name="title_ru" label={t("banners.titleRu")}>
               <Input maxLength={255} />
             </Form.Item>
-          </div>
+          </div> */}
 
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+          {/* <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <Form.Item name="text_tm" label={t("banners.textTm")}>
               <TextArea rows={3} maxLength={1000} />
             </Form.Item>
@@ -415,7 +415,7 @@ export default function BannersPage() {
             <Form.Item name="text_ru" label={t("banners.textRu")}>
               <TextArea rows={3} maxLength={1000} />
             </Form.Item>
-          </div>
+          </div> */}
 
           <Form.Item name="link" label={t("banners.link")}>
             <Input placeholder="/products" maxLength={500} />
