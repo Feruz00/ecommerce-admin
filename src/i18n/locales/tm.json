@@ -172,6 +172,10 @@
   },
 
   "orders": {
+    "processing": "Sargyt goýuldy",
+    "confirmed": "Sargyt kabul edildi",
+    "delivered": "Sargyt gowşuryldy",
+    "cancelled": "Sargyt ýatyryldy",
     "title": "Sargytlar",
     "subtitle": "Müşderileriň sargytlaryny we satyn alan harytlaryny dolandyrmak",
     "order": "Sargyt",

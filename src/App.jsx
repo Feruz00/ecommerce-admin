@@ -15,7 +15,7 @@ import ReportsPage from "./pages/report/ReportsPage";
 
 export default function App() {
   return (
-    <BrowserRouter basename="/admin">
+    <BrowserRouter basename="/v4/admin">
       <Routes>
         <Route path="/login" element={<LoginPage />} />
 

@@ -172,6 +172,10 @@
   },
 
   "orders": {
+    "processing": "Order placed",
+    "confirmed": "Order accepted",
+    "delivered": "Order delivered",
+    "cancelled": "Order cancelled",
     "title": "Orders",
     "subtitle": "Manage customer orders and purchased products",
     "order": "Order",

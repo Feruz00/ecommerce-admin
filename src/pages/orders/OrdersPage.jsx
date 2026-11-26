@@ -29,24 +29,14 @@ import { useOrders, useOrder, useUpdateOrderStatus } from "./hooks";
 
 const { Title, Text } = Typography;
 
-const statuses = [
-  "pending",
-  "confirmed",
-  "processing",
-  "shipped",
-  "delivered",
-  "cancelled",
-];
+const statuses = ["processing", "confirmed", "delivered", "cancelled"];
 
 const statusColors = {
-  pending: "orange",
+  processing: "gold",
   confirmed: "blue",
-  processing: "cyan",
-  shipped: "purple",
   delivered: "green",
   cancelled: "red",
 };
-
 const paymentColors = {
   pending: "orange",
   paid: "green",
@@ -529,11 +519,11 @@ export default function OrdersPage() {
   const summary = useMemo(
     () => ({
       count: orders.length,
-      pending: orders.filter((order) => order.status === "pending").length,
-      processing: orders.filter((order) =>
-        ["confirmed", "processing", "shipped"].includes(order.status),
-      ).length,
-      completed: orders.filter((order) => order.status === "delivered").length,
+      processing: orders.filter((order) => order.status === "processing")
+        .length,
+      confirmed: orders.filter((order) => order.status === "confirmed").length,
+      delivered: orders.filter((order) => order.status === "delivered").length,
+      cancelled: orders.filter((order) => order.status === "cancelled").length,
     }),
     [orders],
   );
@@ -606,13 +596,13 @@ export default function OrdersPage() {
     {
       title: t("status"),
       dataIndex: "status",
-      width: 155,
+      width: 175,
       render: (value, order) => (
         <Select
           size="small"
           value={value}
           disabled={updateMutation.isPending}
-          style={{ width: 135 }}
+          style={{ width: 155 }}
           options={statuses.map((item) => ({
             value: item,
             label: (
@@ -698,25 +688,31 @@ export default function OrdersPage() {
         </div>
 
         {/* Summary */}
-        <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+        <div className="grid grid-cols-2 gap-3 lg:grid-cols-5">
           <SummaryCard label={t("orders.loadedOrders")} value={summary.count} />
 
           <SummaryCard
-            label={t("orderStatus.pending")}
-            value={summary.pending}
-            color="text-orange-500"
-          />
-
-          <SummaryCard
-            label={t("orders.inProgress")}
+            label={t("orders.processing")}
             value={summary.processing}
-            color="text-blue-500"
+            color="text-yellow-600"
           />
 
           <SummaryCard
-            label={t("orderStatus.delivered")}
-            value={summary.completed}
+            label={t("orders.confirmed")}
+            value={summary.confirmed}
+            color="text-blue-600"
+          />
+
+          <SummaryCard
+            label={t("orders.delivered")}
+            value={summary.delivered}
             color="text-green-600"
+          />
+
+          <SummaryCard
+            label={t("orders.cancelled")}
+            value={summary.cancelled}
+            color="text-red-600"
           />
         </div>
 

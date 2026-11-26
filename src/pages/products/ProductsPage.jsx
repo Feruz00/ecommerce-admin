@@ -19,6 +19,7 @@ import {
   Switch,
   Table,
   Tag,
+  TreeSelect,
   Typography,
   Upload,
   message,
@@ -167,6 +168,20 @@ export default function ProductsPage() {
   const products = productsQuery.data?.data?.products || [];
   const categories = categoriesQuery.data?.data?.categories || [];
   const allAttributes = attributesQuery.data?.data?.attributes || [];
+
+  const categoryTreeData = useMemo(() => {
+    const buildTree = (items) =>
+      items.map((category) => ({
+        id: category.id,
+        pId: category.parent_id,
+        value: category.id,
+        title: category.name || "—",
+        key: category.id,
+        children: buildTree(category.children || []),
+      }));
+
+    return buildTree(categories);
+  }, [categories]);
 
   const productAttributes = useMemo(
     () =>
@@ -805,14 +820,25 @@ export default function ProductsPage() {
                       },
                     ]}
                   >
-                    <Select
+                    <TreeSelect
+                      treeData={categoryTreeData}
+                      fieldNames={{
+                        label: "title",
+                        value: "value",
+                        children: "children",
+                      }}
+                      treeNodeFilterProp="title"
                       showSearch
-                      optionFilterProp="label"
+                      allowClear
+                      treeDefaultExpandAll={false}
+                      treeLine
                       placeholder={t("products.placeholders.chooseCategory")}
-                      options={categories.map((category) => ({
-                        value: category.id,
-                        label: category.name || "—",
-                      }))}
+                      loading={categoriesQuery.isLoading}
+                      className="w-full"
+                      dropdownStyle={{
+                        maxHeight: 350,
+                        overflow: "auto",
+                      }}
                     />
                   </Form.Item>
 
